@@ -69,6 +69,10 @@ function loadMDM(filename: string): any {
 const companionMDM = loadMDM('companion.mdm')
 const travelerMDM = loadMDM('traveler.mdm')
 
+// E2: once vocab reaches this threshold, proto-lang takes priority over
+// scripted MDM in autonomous output. Below it, MDM is the safety net.
+const PROTO_LANG_PRIORITY_THRESHOLD = 30
+
 export interface EntityInfo {
   name: string
   entity: Entity
@@ -1193,6 +1197,11 @@ export class WorldSession extends EventEmitter {
   /**
    * Generate autonomous message from companion
    * Companion speaks spontaneously (self-monologue)
+   *
+   * E2: when vocab >= PROTO_LANG_PRIORITY_THRESHOLD (30), proto-language is
+   * tried first — emergent speech takes priority over scripted MDM lines.
+   * Below the threshold, MDM stays first as the safety net (proto-lang on a
+   * tiny vocab produces garbage).
    */
   async generateAutonomousMessage(): Promise<{
     name: string
@@ -1206,64 +1215,72 @@ export class WorldSession extends EventEmitter {
       return null
     }
 
-    // Try mds-core's speak() directly — 5.11 samples across eligible
-    // variants and respects frequency weights, no workaround needed.
-    let response: string | undefined = companion.speak('self_monologue') ?? undefined
+    const vocabSize = this.vocabularyTracker.getVocabularySize()
+    let response: string | undefined
 
-    // Fallback: emotion-based self-talk
-    if (!response) {
-      const emotion = companion.emotion
-      if (emotion.valence > 0.5) {
-        response = companion.speak('happy')
-      } else if (emotion.valence < -0.3) {
-        response = companion.speak('sad')
-      } else {
-        response = companion.speak('curious')
-      }
-    }
+    // Helper: build the proto-language pool for autonomous output
+    const buildPool = (): string[] => {
+      let pool = this.vocabularyTracker.toJSON().knownWords
 
-    // Last resort: proto-language (if vocabulary enough)
-    if (!response && this.vocabularyTracker.getVocabularySize() >= 20) {
-      let vocabularyPool = this.vocabularyTracker.toJSON().knownWords
-
-      // Add crystallized patterns
+      // Crystallized patterns
       if (this.world.lexicon) {
         const patterns = this.world.lexicon.getAll()
         if (patterns.length > 0) {
-          const frequentPatterns = patterns
-            .filter(p => p.weight > 0.3)
-            .map(p => p.phrase)
-          vocabularyPool = [...vocabularyPool, ...frequentPatterns]
+          const frequent = patterns.filter(p => p.weight > 0.3).map(p => p.phrase)
+          pool = [...pool, ...frequent]
         }
       }
 
-      // E1: Seed pool with companion-specific MDM tokens (same as getEntityResponse).
+      // E1: companion-specific MDM tokens
       if (this.companionTokens.length > 0) {
-        vocabularyPool = [...vocabularyPool, ...this.companionTokens]
+        pool = [...pool, ...this.companionTokens]
       }
 
-      // Environment-aware vocabulary
+      // Environment-based vocab modifiers
       const envState = this.environment.getState(companion.x, companion.y)
-      const tempCelsius = envState.temperature - 273
+      const tempC = envState.temperature - 273
+      if (tempC > 30) pool.push('ร้อน', 'hot', '🥵')
+      else if (tempC < 15) pool.push('หนาว', 'cold', '🥶')
+      if (envState.humidity > 0.7) pool.push('ชื้น', 'humid', '💧')
+      if (envState.light < 0.4) pool.push('มืด', 'dark', '🌙')
+      const weather = this.weather.getState()
+      if (weather.rain) pool.push('ฝนตก', 'rain', '🌧️')
 
-      if (tempCelsius > 30) vocabularyPool.push('ร้อน', 'hot', '🥵')
-      else if (tempCelsius < 15) vocabularyPool.push('หนาว', 'cold', '🥶')
+      return pool
+    }
 
-      if (envState.humidity > 0.7) vocabularyPool.push('ชื้น', 'humid', '💧')
-      if (envState.light < 0.4) vocabularyPool.push('มืด', 'dark', '🌙')
+    const tryProtoLang = (): string | undefined => {
+      const pool = buildPool()
+      if (pool.length < 20) return undefined
+      return (this.protoLangGenerator as any).generate({
+        vocabularyPool: pool,
+        emotion: companion.emotion,
+        minWords: 1,
+        maxWords: 5,
+        allowParticles: true,
+        allowEmoji: true,
+        creativity: 0.5
+      }) ?? undefined
+    }
 
-      const weatherState = this.weather.getState()
-      if (weatherState.rain) {
-        vocabularyPool.push('ฝนตก', 'rain', '🌧️')
+    if (vocabSize >= PROTO_LANG_PRIORITY_THRESHOLD) {
+      // PROTO-FIRST: prefer emergent speech once companion has learned enough words.
+      // Fall back to MDM if proto-lang returns nothing.
+      response = tryProtoLang()
+      if (!response) {
+        response = companion.speak('self_monologue') ?? undefined
       }
-
-      // Generate proto-language
-      response = this.protoLangGenerator.generate(
-        companion.emotion,
-        vocabularyPool,
-        undefined,  // No user message for autonomous
-        envState
-      )
+    } else {
+      // MDM-FIRST: scripted MDM is the safety net while vocab is too small
+      // for proto-lang to produce meaningful output.
+      response = companion.speak('self_monologue') ?? undefined
+      if (!response) {
+        const emotion = companion.emotion
+        if (emotion.valence > 0.5) response = companion.speak('happy') ?? undefined
+        else if (emotion.valence < -0.3) response = companion.speak('sad') ?? undefined
+        else response = companion.speak('curious') ?? undefined
+      }
+      if (!response) response = tryProtoLang()
     }
 
     // If still no response, skip this cycle

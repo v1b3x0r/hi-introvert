@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# macOS metadata
+.DS_Store
+
+# Logs
+*.log
+
+# Runtime session state (created by hi-introvert TUI)
+.hi-introvert-session.json
+
+# Local environment overrides
+.env
+.env.local

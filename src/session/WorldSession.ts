@@ -42,7 +42,6 @@ import { computeMoonPhase } from '../sensors/MoonSensor.js'
 import { readLocalContext } from '../sensors/LocalContextSensor.js'
 import { fetchWeather } from '../sensors/OutsideWeatherSensor.js'
 import { detectChargerTransition, transitionSalience } from '../utils/charger-transition.js'
-import { boostedTokensFromMemories } from '../utils/memory-tokens.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -1008,40 +1007,28 @@ export class WorldSession extends EventEmitter {
         }
       }
 
-      // v1.2.2: Boost tokens from relevant memories so proto-language can
-      // surface contextually meaningful words (e.g. user's name).
-      // PREPEND, not append: mds-core's generate() only samples from
-      // the first 10 elements of the pool, so trailing items never get picked.
-      //
-      // Filter to fact-like memories (intent statement/teaching/greeting),
-      // not question memories — otherwise repeated "what is X?" turns store
-      // self-referential question memories that drown out the actual answer
-      // memory in the relevance ranking.
-      // Recall fact memories directly so we don't get truncated by
-      // ContextAnalyzer's top-5 limit (which fills with question memories
-      // after long Q-and-A sessions).
+      // Add tokens from memories relevant to the current message to the pool.
+      // mds-core 5.11 samples from the full pool, so position no longer matters
+      // (pre-5.11 we had to prepend to land within the first-10 window).
+      const relevantMemoryTokens: string[] = []
       const allTravelerMemories = (entity.memory?.recall?.() ?? [])
         .filter((m: any) => m?.subject === 'traveler' && m?.content?.intent !== 'question')
-      // Keyword overlap scoring against the current question
-      const factMemories = allTravelerMemories
-        .map((m: any) => {
-          const content = JSON.stringify(m.content ?? '').toLowerCase()
-          let score = 0
-          for (const k of context.keywords) {
-            if (content.includes(k)) score += 1
+      for (const m of allTravelerMemories) {
+        const content = JSON.stringify(m.content ?? '').toLowerCase()
+        let score = 0
+        for (const k of context.keywords) {
+          if (content.includes(k)) score += 1
+        }
+        if (score > 0) {
+          const raw = JSON.stringify(m.content ?? '')
+          // crude word split — proto-lang will tokenize internally
+          for (const w of raw.split(/[\s,."{}\[\]:]+/)) {
+            if (w.length > 1) relevantMemoryTokens.push(w.toLowerCase())
           }
-          return { m, score: score * (m.salience ?? 0.5) }
-        })
-        .filter((x: any) => x.score > 0)
-        .sort((a: any, b: any) => b.score - a.score)
-        .slice(0, 5)
-        .map((x: any) => x.m)
-
-      if (factMemories.length > 0) {
-        vocabularyPool = [
-          ...boostedTokensFromMemories(factMemories, 8),
-          ...vocabularyPool,
-        ]
+        }
+      }
+      if (relevantMemoryTokens.length > 0) {
+        vocabularyPool = [...vocabularyPool, ...relevantMemoryTokens]
       }
 
       // mds-core's generateResponse() filters the pool aggressively when the

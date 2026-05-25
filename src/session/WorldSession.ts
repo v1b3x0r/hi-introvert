@@ -1525,25 +1525,6 @@ export class WorldSession extends EventEmitter {
   }
 
   /**
-   * v6.1: Use crystallized patterns in proto-language
-   * Enhances emergent language with discovered patterns
-   */
-  private enhanceProtoLanguageWithCrystallization() {
-    // Trigger crystallization analysis
-    if (this.world.lexicon) {
-      const patterns = this.world.lexicon.getAll()
-
-      if (patterns.length > 0) {
-        this.debug(`v6.1: Crystallized ${patterns.length} linguistic patterns`)
-        this.emit('crystallization', {
-          patternCount: patterns.length,
-          topPatterns: patterns.slice(0, 5).map(p => p.phrase)
-        })
-      }
-    }
-  }
-
-  /**
    * v6.2: Spawn "sync moment" field
    * Creates field when conversation resonates (high emotional alignment)
    * Field boosts valence and strengthens relationship

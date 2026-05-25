@@ -1443,13 +1443,6 @@ export class WorldSession extends EventEmitter {
   }
 
   /**
-   * Get entity info
-   */
-  getEntityInfo(): EntityInfo {
-    return this.entity
-  }
-
-  /**
    * Get all events
    */
   getAllEvents() {

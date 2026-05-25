@@ -284,7 +284,7 @@ hi-introvert/
 ├── entities/
 │   ├── companion.mdm            # The kid
 │   └── traveler.mdm             # You
-├── tests/                       # 59 tests, all passing
+├── tests/                       # 90 pass, 1 skip (pending mds-core 5.12)
 └── dist/                        # Bundled output
 ```
 

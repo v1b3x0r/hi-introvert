@@ -19,13 +19,13 @@ beforeAll(() => {
   }
 })
 
-test('with vocab >= 30, protoLangGenerator.generate is called before companion.speak', async () => {
-  const { WorldSession } = await import('../../src/session/WorldSession')
+test('with vocab >= threshold, protoLangGenerator.generate is called before companion.speak', async () => {
+  const { WorldSession, PROTO_LANG_PRIORITY_THRESHOLD } = await import('../../src/session/WorldSession')
   const session = new WorldSession()
   session.setSilentMode(true)
 
-  // Bump vocab over threshold
-  for (let i = 0; i < 60; i++) {
+  // Bump vocab over threshold (×2 for comfortable margin)
+  for (let i = 0; i < PROTO_LANG_PRIORITY_THRESHOLD * 2; i++) {
     ;(session as any).vocabularyTracker.detectNewWords(`testword${i}`)
   }
 
@@ -54,15 +54,15 @@ test('with vocab >= 30, protoLangGenerator.generate is called before companion.s
   }
 })
 
-test('with vocab < 30, companion.speak is called first (safety net)', async () => {
-  const { WorldSession } = await import('../../src/session/WorldSession')
+test('with vocab < threshold, companion.speak is called first (safety net)', async () => {
+  const { WorldSession, PROTO_LANG_PRIORITY_THRESHOLD } = await import('../../src/session/WorldSession')
   const session = new WorldSession()
   session.setSilentMode(true)
 
-  // Default vocab is well above 30 (BASE_VOCABULARY ~200) so we mock
-  // vocabularyTracker.getVocabularySize() down for this test.
+  // Default vocab is well above threshold (BASE_VOCABULARY ~200) so we mock
+  // vocabularyTracker.getVocabularySize() to a value below the gate.
   const vt = (session as any).vocabularyTracker
-  vt.getVocabularySize = () => 10
+  vt.getVocabularySize = () => Math.max(1, PROTO_LANG_PRIORITY_THRESHOLD - 20)
 
   const order: string[] = []
   const proto = (session as any).protoLangGenerator

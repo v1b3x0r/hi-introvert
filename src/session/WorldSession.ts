@@ -71,7 +71,9 @@ const travelerMDM = loadMDM('traveler.mdm')
 
 // E2: once vocab reaches this threshold, proto-lang takes priority over
 // scripted MDM in autonomous output. Below it, MDM is the safety net.
-const PROTO_LANG_PRIORITY_THRESHOLD = 30
+// Exported so tests can read the canonical value (avoid duplicating the
+// number in test mocks).
+export const PROTO_LANG_PRIORITY_THRESHOLD = 30
 
 // E3: minimum gap between non-null autonomous emissions (milliseconds).
 // Within this window generateAutonomousMessage() returns null and emits

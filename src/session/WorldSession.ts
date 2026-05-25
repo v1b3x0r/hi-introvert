@@ -73,6 +73,11 @@ const travelerMDM = loadMDM('traveler.mdm')
 // scripted MDM in autonomous output. Below it, MDM is the safety net.
 const PROTO_LANG_PRIORITY_THRESHOLD = 30
 
+// E3: minimum gap between non-null autonomous emissions (milliseconds).
+// Within this window generateAutonomousMessage() returns null and emits
+// 'autonomous-skip'. Exported so tests can read the canonical value.
+export const AUTONOMOUS_COOLDOWN_MS = 45000
+
 export interface EntityInfo {
   name: string
   entity: Entity
@@ -119,6 +124,10 @@ export class WorldSession extends EventEmitter {
    * so we don't re-tokenize on every proto-lang call.
    */
   private companionTokens: string[] = []
+
+  /** Timestamp of the last non-null autonomous emission. Used by the
+   *  E3 cooldown gate — see generateAutonomousMessage(). */
+  private lastAutonomousAt: number = 0
 
   // v5.7.1: Chat trigger context tracking
   lastMessageTime: number = Date.now()
@@ -1215,6 +1224,15 @@ export class WorldSession extends EventEmitter {
       return null
     }
 
+    // E3 cooldown gate: cap autonomous output frequency. Silence is a
+    // valid outcome — the scheduler treats null returns as no-emit.
+    const now = Date.now()
+    const sinceMs = now - this.lastAutonomousAt
+    if (this.lastAutonomousAt > 0 && sinceMs < AUTONOMOUS_COOLDOWN_MS) {
+      this.emit('autonomous-skip', { reason: 'cooldown', sinceMs })
+      return null
+    }
+
     const vocabSize = this.vocabularyTracker.getVocabularySize()
     let response: string | undefined
 
@@ -1283,10 +1301,14 @@ export class WorldSession extends EventEmitter {
       if (!response) response = tryProtoLang()
     }
 
-    // If still no response, skip this cycle
+    // If still no response, skip this cycle (do NOT update lastAutonomousAt —
+    // silence-on-top-of-silence would create a stuck cooldown state).
     if (!response) {
       return null
     }
+
+    // E3: record emission timestamp ONLY when returning a non-null result.
+    this.lastAutonomousAt = Date.now()
 
     return {
       name: this.companionEntity.name,

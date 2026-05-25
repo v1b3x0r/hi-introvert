@@ -50,6 +50,8 @@ test('group-level: at least one companion token appears in 100 autonomous output
 
   const all: string[] = []
   for (let i = 0; i < 100; i++) {
+    // Reset cooldown so this test isn't gated by E3.
+    ;(session as any).lastAutonomousAt = 0
     const r = await session.generateAutonomousMessage()
     if (r?.response) all.push(r.response)
   }

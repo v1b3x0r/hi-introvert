@@ -28,6 +28,8 @@ test('20 autonomous monologues produce at least 5 unique lines', async () => {
   const seen = new Set<string>()
   let nullReplies = 0
   for (let i = 0; i < 20; i++) {
+    // Reset E3 cooldown so this variety test isn't gated between iterations.
+    ;(session as any).lastAutonomousAt = 0
     const r = await session.generateAutonomousMessage()
     if (!r?.response) { nullReplies++; continue }
     seen.add(r.response)

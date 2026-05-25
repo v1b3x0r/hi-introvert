@@ -39,6 +39,7 @@ test('with vocab >= 30, protoLangGenerator.generate is called before companion.s
   const originalSpeak = companion.speak.bind(companion)
   companion.speak = (...args: any[]) => { order.push(`speak:${args[0]}`); return originalSpeak(...args) }
 
+  ;(session as any).lastAutonomousAt = 0
   await session.generateAutonomousMessage()
 
   process.stderr.write(`[autonomous-priority] call order: ${JSON.stringify(order)}\n`)
@@ -72,6 +73,7 @@ test('with vocab < 30, companion.speak is called first (safety net)', async () =
   const originalSpeak = companion.speak.bind(companion)
   companion.speak = (...args: any[]) => { order.push(`speak:${args[0]}`); return originalSpeak(...args) }
 
+  ;(session as any).lastAutonomousAt = 0
   await session.generateAutonomousMessage()
 
   process.stderr.write(`[autonomous-priority low-vocab] call order: ${JSON.stringify(order)}\n`)

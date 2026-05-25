@@ -926,12 +926,11 @@ export class WorldSession extends EventEmitter {
       'introspection': 'self_monologue'
     }
 
-    // v1.2.2: When the user asks a question AND the companion has a memory
-    // matching it, skip mds-core's hardcoded category fallbacks ("นั่นอะไร?",
-    // "*เอียงหัว*", etc.) and let proto-language compose a reply using the
-    // memory-boosted vocabulary pool. Aligns with v6.3 "force proto-language"
-    // philosophy — companion should *struggle* to speak from what it knows,
-    // not default to canned curiosity.
+    // When the user asks a question AND the companion has a memory matching
+    // it, skip the category-based dialogue fallbacks and let proto-language
+    // compose a reply using a memory-augmented vocabulary pool. Aligns with
+    // the "force proto-language" philosophy — companion should *struggle* to
+    // speak from what it knows, not default to canned curiosity.
     const memoryGuidedQuestion =
       context.intent === 'question' && context.relevantMemories.length > 0
 
@@ -1031,14 +1030,16 @@ export class WorldSession extends EventEmitter {
         vocabularyPool = [...vocabularyPool, ...relevantMemoryTokens]
       }
 
-      // mds-core's generateResponse() filters the pool aggressively when the
-      // user asks a question (only keeps think/know/maybe words), which
-      // strips our memory boost. For memory-guided questions we call the
-      // unfiltered generate() so memory tokens have a chance to surface.
+      // A5 workaround (still needed in mds-core 5.11 — slated for 5.12):
+      // ProtoLanguageGenerator.generateResponse() filters the pool aggressively
+      // when the user message is detected as a question (keeps only
+      // think/know/maybe anchor words), which strips memory-relevant tokens
+      // from the output. For memory-guided questions we call the unfiltered
+      // generate() directly so the memory-augmented pool can surface.
       if (memoryGuidedQuestion) {
-        // Skip emotion filter — keeps our memory boost in the first-10
-        // sampling window. Also skip greeting/thinking filters that
-        // generateResponse() applies.
+        // Use plain generate() (no emotion/intent filters applied by
+        // generateResponse) so the memory-augmented pool reaches sampling
+        // intact.
         response = (this.protoLangGenerator as any).generate({
           vocabularyPool,
           emotion: undefined,

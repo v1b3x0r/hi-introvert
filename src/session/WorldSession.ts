@@ -42,6 +42,8 @@ import { computeMoonPhase } from '../sensors/MoonSensor.js'
 import { readLocalContext } from '../sensors/LocalContextSensor.js'
 import { fetchWeather } from '../sensors/OutsideWeatherSensor.js'
 import { detectChargerTransition, transitionSalience } from '../utils/charger-transition.js'
+import { extractCompanionTokens } from '../utils/mdm-tokens.js'
+import { BASE_VOCABULARY } from '../vocabulary/base-vocabulary.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -106,6 +108,13 @@ export class WorldSession extends EventEmitter {
 
   // v1.2.1: Track last-seen charger state for transition detection
   private _lastCharging: boolean | null = null
+
+  /**
+   * Companion-specific vocabulary tokens harvested from MDM dialogue,
+   * minus anything already in BASE_VOCABULARY. Cached at construction
+   * so we don't re-tokenize on every proto-lang call.
+   */
+  private companionTokens: string[] = []
 
   // v5.7.1: Chat trigger context tracking
   lastMessageTime: number = Date.now()
@@ -209,6 +218,10 @@ export class WorldSession extends EventEmitter {
     // Spawn both entities (both autonomous initially)
     this.spawnCompanion()
     this.spawnTraveler()
+
+    // Cache companion-specific vocabulary tokens once (set-difference vs.
+    // BASE_VOCABULARY so function words don't dominate the pool).
+    this.companionTokens = extractCompanionTokens(companionMDM, BASE_VOCABULARY)
 
     // Auto-impersonate traveler (user controls traveler by default)
     this.impersonate('traveler')
@@ -986,6 +999,12 @@ export class WorldSession extends EventEmitter {
         }
       }
 
+      // E1: Seed pool with companion-specific MDM tokens so proto-language
+      // can speak in the companion's voice, not just kid-language.
+      if (this.companionTokens.length > 0) {
+        vocabularyPool = [...vocabularyPool, ...this.companionTokens]
+      }
+
       // v6.2: Get environment state at entity position
       const envState = this.environment.getState(entity.x, entity.y)
 
@@ -1216,6 +1235,11 @@ export class WorldSession extends EventEmitter {
             .map(p => p.phrase)
           vocabularyPool = [...vocabularyPool, ...frequentPatterns]
         }
+      }
+
+      // E1: Seed pool with companion-specific MDM tokens (same as getEntityResponse).
+      if (this.companionTokens.length > 0) {
+        vocabularyPool = [...vocabularyPool, ...this.companionTokens]
       }
 
       // Environment-aware vocabulary

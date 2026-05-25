@@ -38,13 +38,11 @@ import { MemoryPromptBuilder } from './MemoryPromptBuilder.js'
 import { GrowthTracker } from './GrowthTracker.js'
 import { ProtoLanguageGenerator } from '@v1b3x0r/mds-core'
 import { OSSensor } from '../sensors/OSSensor.js'
-import { dedupeSpeak } from '../utils/dedupe-speak.js'
 import { computeMoonPhase } from '../sensors/MoonSensor.js'
 import { readLocalContext } from '../sensors/LocalContextSensor.js'
 import { fetchWeather } from '../sensors/OutsideWeatherSensor.js'
 import { detectChargerTransition, transitionSalience } from '../utils/charger-transition.js'
 import { boostedTokensFromMemories } from '../utils/memory-tokens.js'
-import { pickFromMDM } from '../utils/pick-from-mdm.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -101,9 +99,6 @@ export class WorldSession extends EventEmitter {
   autoSaveEnabled: boolean = false  // v6.3: Disabled - BlessedApp handles save with history
   silentMode: boolean = false  // v6.3: Disable console.log for TUI mode
 
-  // v1.1.2: Track last spoken lines per (entity, category) to dedupe MDM dialogue
-  private recentSpoken: Map<string, string[]> = new Map()
-
   // v1.2: Privacy toggles for ambient external sensors
   privacySettings = {
     outsideWeatherEnabled: true,
@@ -112,18 +107,6 @@ export class WorldSession extends EventEmitter {
 
   // v1.2.1: Track last-seen charger state for transition detection
   private _lastCharging: boolean | null = null
-
-  /**
-   * Anti-repeat wrapper for entity.speak() — works around mds-core's
-   * tendency to pick the same dialogue line repeatedly.
-   */
-  private speakDedup(entity: Entity, category: string): string | undefined {
-    const key = `${entity.name}:${category}`
-    const recent = this.recentSpoken.get(key) ?? []
-    const { line, updatedRecent } = dedupeSpeak(() => entity.speak(category), recent)
-    this.recentSpoken.set(key, updatedRecent)
-    return line
-  }
 
   // v5.7.1: Chat trigger context tracking
   lastMessageTime: number = Date.now()
@@ -760,10 +743,10 @@ export class WorldSession extends EventEmitter {
 
     if (travelerMemories.length === 0) {
       // First meeting - use intro dialogue
-      return this.speakDedup(entity, 'intro') || 'Hi...'
+      return entity.speak('intro') || 'Hi...'
     } else {
       // Returning visitor - use greeting_familiar
-      const greeting = this.speakDedup(entity, 'greeting_familiar') || 'Welcome back!'
+      const greeting = entity.speak('greeting_familiar') || 'Welcome back!'
       return greeting
     }
   }
@@ -956,33 +939,33 @@ export class WorldSession extends EventEmitter {
     if (!memoryGuidedQuestion) {
       const category = categoryMap[context.intent]
       if (category) {
-        response = this.speakDedup(entity, category)
+        response = entity.speak(category)
       }
     }
 
     // If new words learned, acknowledge
     if (!response && !memoryGuidedQuestion && context.keywords.some(k => !this.vocabularyTracker.canUse(k))) {
-      response = this.speakDedup(entity, 'learned_new_word')
+      response = entity.speak('learned_new_word')
     }
 
     // If confused (low memory relevance)
     if (!response && context.relevantMemories.length === 0 && context.intent === 'question') {
-      response = this.speakDedup(entity, 'confused')
+      response = entity.speak('confused')
     }
 
     // Emotion-based fallback (skip for memory-guided questions)
     if (!response && !memoryGuidedQuestion) {
       const emotion = entity.emotion
       if (emotion.valence > 0.5) {
-        response = this.speakDedup(entity, 'happy')
+        response = entity.speak('happy')
       } else if (emotion.valence < -0.3) {
-        response = this.speakDedup(entity, 'sad')
+        response = entity.speak('sad')
       } else if (emotion.arousal > 0.6) {
-        response = this.speakDedup(entity, 'excited')
+        response = entity.speak('excited')
       } else if (emotion.arousal < 0.3) {
-        response = this.speakDedup(entity, 'tired')
+        response = entity.speak('tired')
       } else {
-        response = this.speakDedup(entity, 'curious')
+        response = entity.speak('curious')
       }
     }
 
@@ -1124,13 +1107,13 @@ export class WorldSession extends EventEmitter {
         response = llmResponse.text
       } catch (error) {
         this.emit('error', { type: 'llm', message: error instanceof Error ? error.message : String(error) })
-        response = this.speakDedup(entity, 'intro') || '...'
+        response = entity.speak('intro') || '...'
       }
     }
 
     // 3. Final fallback (generic)
     if (!response) {
-      response = this.speakDedup(entity, 'intro') || '...'
+      response = entity.speak('intro') || '...'
     }
 
     return response
@@ -1215,32 +1198,19 @@ export class WorldSession extends EventEmitter {
       return null
     }
 
-    // v1.2.4: Bypass mds-core's entity.speak() for self_monologue —
-    // it deterministically picks the first matching language line (see
-    // mds-core #10), so dedupeSpeak's retry loop can't escape the loop.
-    // Read companion.mdm directly and sample with non-recent preference.
-    let response: string | undefined
-    {
-      const key = `${companion.name}:self_monologue:mdm`
-      const recent = this.recentSpoken.get(key) ?? []
-      const picked = pickFromMDM(companionMDM, 'self_monologue', recent)
-      if (picked) {
-        response = picked
-        this.recentSpoken.set(key, [...recent, picked].slice(-6))
-      }
-    }
-    // Last-resort: try the engine's speak() (will hit fallback set if MDM empty)
-    if (!response) response = this.speakDedup(companion, 'self_monologue')
+    // Try mds-core's speak() directly — 5.11 samples across eligible
+    // variants and respects frequency weights, no workaround needed.
+    let response: string | undefined = companion.speak('self_monologue') ?? undefined
 
     // Fallback: emotion-based self-talk
     if (!response) {
       const emotion = companion.emotion
       if (emotion.valence > 0.5) {
-        response = this.speakDedup(companion, 'happy')
+        response = companion.speak('happy')
       } else if (emotion.valence < -0.3) {
-        response = this.speakDedup(companion, 'sad')
+        response = companion.speak('sad')
       } else {
-        response = this.speakDedup(companion, 'curious')
+        response = companion.speak('curious')
       }
     }
 

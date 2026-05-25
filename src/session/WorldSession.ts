@@ -1123,7 +1123,7 @@ export class WorldSession extends EventEmitter {
 
     try {
       const response = await this.world.languageGenerator.generate({
-        speaker: this.primaryEntity.entity,
+        speaker: this.companionEntity.entity,
         context: prompt
       })
 
@@ -1153,8 +1153,8 @@ export class WorldSession extends EventEmitter {
       this.entities.set(name, entityInfo)
 
       // Primary entity remembers meeting new friend
-      if (this.primaryEntity.entity.memory) {
-        this.primaryEntity.entity.remember({
+      if (this.companionEntity.entity.memory) {
+        this.companionEntity.entity.remember({
           type: 'interaction',
           subject: name,
           content: { action: 'met', essence: generatedData.essence },

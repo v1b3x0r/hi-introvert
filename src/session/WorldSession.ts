@@ -130,6 +130,7 @@ export class WorldSession extends EventEmitter {
     super()  // Call EventEmitter constructor
     // Initialize World with full features + LLM
     this.world = new World({
+      silent: true,              // delegate startup diagnostics to mds-core (5.11+)
       features: {
         ontology: true,
         communication: true,

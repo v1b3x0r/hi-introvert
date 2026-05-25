@@ -82,7 +82,7 @@ describe('name recall', () => {
     // Without boost, P("บ้าน") in a 1-4 word sample from ~600 pool ≈ 0.5%
     // → expected ~0.15 hits over 30 trials
     // With boost (x8 salience-weighted), expected ~5+ hits.
-    // Use a conservative bar to avoid flakiness from anti-repeat + dialogue fallbacks.
+    // Use a conservative bar to avoid flakiness from dialogue fallbacks.
     expect(hits).toBeGreaterThan(0)
   }, 15000)
 

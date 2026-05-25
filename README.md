@@ -198,23 +198,24 @@ hi-introvert/ui/ink — terminal UI: Ink + React, five small components,
                       no business logic.
 ```
 
-Three new things in v1.2 worth knowing:
+Two things worth knowing about the engine wiring:
 
 1. **Thai tokenizer (`src/utils/tokenize.ts`)** — uses `Intl.Segmenter('th')`
-   for proper Thai word segmentation. Before v1.2, the tokenizer split on
+   for proper Thai word segmentation. Before this fix, the tokenizer split on
    whitespace, which meant Thai sentences became one giant "word" and
-   vocabulary couldn't grow. Now it does.
-2. **Anti-repeat (`src/utils/dedupe-speak.ts`)** — wraps `entity.speak()` so
-   the companion doesn't pick the same dialogue line twice in a row. The MDM
-   has variety; this lets it surface.
-3. **Four ambient sensors** — Moon, Local context, Outside weather, Charger
+   vocabulary couldn't grow.
+2. **Four ambient sensors** — Moon, Local context, Outside weather, Charger
    transitions (see Privacy). They broadcast events into the world's semantic
    bus; the companion's `entity.memory.remember()` samples them at ~10–30%.
    Effects appear emergently in proto-language, not as direct lines.
 
+(Reply variety used to need a local anti-repeat wrapper; since mds-core 5.11
+the engine samples eligible dialogue variants and respects `frequency`
+weights directly, so the wrapper is no longer present.)
+
 ## Tech notes
 
-- **mds-core** v5.10+ — the engine
+- **mds-core** v5.11+ — the engine
 - **Ink** v5 + React 18 — terminal UI
 - **Bun** for build, Node 18+ runtime
 - **No database.** Save files are plain JSON.
@@ -279,7 +280,7 @@ hi-introvert/
 │   ├── session/WorldSession.ts  # World wiring + handlers
 │   ├── sensors/                 # OS, Moon, LocalContext, OutsideWeather
 │   ├── vocabulary/              # Tokenizer, base vocab, tracker
-│   └── utils/                   # tokenize, dedupe-speak, to-text
+│   └── utils/                   # tokenize, to-text, etc.
 ├── entities/
 │   ├── companion.mdm            # The kid
 │   └── traveler.mdm             # You

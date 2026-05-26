@@ -44,6 +44,7 @@ import { fetchWeather } from '../sensors/OutsideWeatherSensor.js'
 import { detectChargerTransition, transitionSalience } from '../utils/charger-transition.js'
 import { extractCompanionTokens } from '../utils/mdm-tokens.js'
 import { BASE_VOCABULARY } from '../vocabulary/base-vocabulary.js'
+import { extractNameIntroduction } from '../utils/name-detect.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -853,6 +854,35 @@ export class WorldSession extends EventEmitter {
       salience: 0.7
     })
 
+    // 5b. Identity memory: if the user introduced their name, store a
+    // separately-tagged memory so retrieval can target it across TH/EN
+    // question phrasings. mds-core 5.11 `recallByTopic` matches on the
+    // `keywords` field. Note: entity.remember() drops `keywords` (passes
+    // only timestamp/type/subject/content/salience to memory.add). We
+    // bypass the wrapper and call memory.add() directly so keywords land.
+    const intro = extractNameIntroduction(message)
+    if (intro && companion.memory) {
+      companion.memory.add({
+        type: 'interaction',
+        subject: 'user_name',
+        content: { name: intro.name, originalMessage: message },
+        // Broad keyword set: identity questions take many forms — "do you
+        // remember me", "who am I", "what's my name", "จำได้ไหม". Tag the
+        // memory with all common identity-question signals so retrieval
+        // works across phrasings without per-phrasing special-casing.
+        keywords: [
+          'name', 'ชื่อ', 'เรียก', 'called',
+          'remember', 'recall', 'จำ',
+          'who', 'ใคร',
+          'know', 'รู้จัก',
+          intro.name.toLowerCase()
+        ],
+        timestamp: Date.now(),
+        salience: 0.95
+      } as any)
+      this.emit('identity', { name: intro.name })
+    }
+
     // 6. Form/reinforce cognitive link (entity-to-entity)
     if (companion.cognitiveLinks && traveler.cognitiveLinks) {
       companion.connectTo(traveler, { strength: 0.7, bidirectional: true })
@@ -893,10 +923,24 @@ export class WorldSession extends EventEmitter {
 
     // 11. Update growth tracker
     this.vocabularyTracker.incrementConversation()
+
+    // Emergent emotional maturity:
+    //   0.5 × companion.emotion.dominance  (how grounded/self-assured)
+    // + 0.5 × subject diversity            (richness of remembered experience)
+    // Diversity cap = 8 distinct memory subjects → "rich life" baseline.
+    const dominance = Math.max(0, Math.min(1, companion.emotion.dominance ?? 0))
+    const subjectSet = new Set<string>()
+    for (const mem of companion.memory?.memories ?? []) {
+      if (mem?.subject) subjectSet.add(String(mem.subject))
+    }
+    const diversity = Math.min(1, subjectSet.size / 8)
+    const maturity = 0.5 * dominance + 0.5 * diversity
+
     this.growthTracker.update({
       vocabularySize: this.vocabularyTracker.getVocabularySize(),
       conversationCount: this.vocabularyTracker.toJSON().conversationCount,
-      memoryCount: companion.memory?.memories?.length || 0
+      memoryCount: companion.memory?.memories?.length || 0,
+      emotionalMaturity: maturity
     })
 
     // Track concepts learned
@@ -1064,6 +1108,41 @@ export class WorldSession extends EventEmitter {
       if (relevantMemoryTokens.length > 0) {
         vocabularyPool = [...vocabularyPool, ...relevantMemoryTokens]
       }
+
+      // Identity-focused pool: when the user is asking about identity AND
+      // we have a name memory, REPLACE the proto-lang pool with a small
+      // identity-centric subset instead of trying to bias a 700-token pool.
+      //
+      // Why shrink + bias instead of just bias: at production scale the
+      // vocab pool reaches 500+ tokens, which dilutes any repetition-boost
+      // to ~4% per slot — name almost never surfaces. With a ~80-token
+      // identity-focused pool where the name is ~50% of entries, the name
+      // surfaces in roughly 1 of every 2 turns — close to "companion knows
+      // your name" without forcing it.
+      //
+      // We still keep some general vocab + companion tokens for texture so
+      // outputs feel emergent ("Wutty know นะ") rather than canned.
+      const identityMems = context.relevantMemories.filter(
+        (m: any) => m?.subject === 'user_name' && typeof m?.content?.name === 'string'
+      )
+      if (identityMems.length > 0) {
+        const nameToken = (identityMems[0] as any).content.name as string
+        const generalSample = vocabularyPool.slice(0, 30)
+        vocabularyPool = [
+          ...Array(50).fill(nameToken),
+          ...generalSample,
+          'remember', 'know', 'yes', 'จำได้', 'ใช่',
+        ]
+      }
+
+      // Defensive sanitization: mds-core proto-lang `filterByEmotion` calls
+      // `w.includes(p)` on every pool element — a single undefined entry
+      // crashes the whole generation. Sources of bad entries observed in
+      // live use include lexicon patterns with missing `.phrase` and stray
+      // joins from crystallization. Filter to non-empty strings.
+      vocabularyPool = vocabularyPool.filter(
+        (w): w is string => typeof w === 'string' && w.length > 0
+      )
 
       // A5 workaround (still needed in mds-core 5.11 — slated for 5.12):
       // ProtoLanguageGenerator.generateResponse() filters the pool aggressively
@@ -1270,7 +1349,9 @@ export class WorldSession extends EventEmitter {
     }
 
     const tryProtoLang = (): string | undefined => {
-      const pool = buildPool()
+      const pool = buildPool().filter(
+        (w): w is string => typeof w === 'string' && w.length > 0
+      )
       if (pool.length < 20) return undefined
       return (this.protoLangGenerator as any).generate({
         vocabularyPool: pool,
@@ -1429,6 +1510,12 @@ export class WorldSession extends EventEmitter {
       this.companionEntity.entity = this.world.entities[0]
       this.impersonatedEntity.entity = this.world.entities[1]
 
+      // mds-core toWorldFile/fromWorldFile does not round-trip the skills
+      // proficiency map → after load `companion.skills.getSkill('x')`
+      // returns undefined → UI shows "cnv00 cre00 ...". Re-enable + re-seed
+      // skills on the deserialized companion to restore baseline.
+      this.rehydrateCompanionFeatures()
+
       // Restore privacy settings (v1.2)
       if (data.privacySettings) {
         this.privacySettings = { ...this.privacySettings, ...data.privacySettings }
@@ -1479,6 +1566,9 @@ export class WorldSession extends EventEmitter {
       // Restore entity references
       this.companionEntity.entity = this.world.entities[0]
       this.impersonatedEntity.entity = this.world.entities[1]
+
+      // See note in loadSession() — skills don't round-trip.
+      this.rehydrateCompanionFeatures()
 
       return {
         success: true,
@@ -1536,6 +1626,22 @@ export class WorldSession extends EventEmitter {
       target: 'traveler',
       strength: 0.7
     })
+  }
+
+  /**
+   * Re-enable companion features + re-seed skills after entity replacement.
+   *
+   * mds-core toWorldFile/fromWorldFile serializes entity state but the
+   * skills proficiency map and feature flags are not part of the worldfile
+   * round-trip — calling addSkill again on the deserialized entity restores
+   * the baseline so the TUI status line shows real values, not "00".
+   */
+  private rehydrateCompanionFeatures() {
+    const companion = this.companionEntity?.entity
+    if (!companion) return
+    companion.enable('memory', 'learning', 'relationships', 'skills')
+    companion.enableAutonomous()
+    this.initializeCompanionSkills()
   }
 
   /**

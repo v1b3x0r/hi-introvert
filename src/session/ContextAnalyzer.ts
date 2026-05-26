@@ -146,6 +146,19 @@ export class ContextAnalyzer {
 
   /**
    * Find relevant memories based on keywords
+   *
+   * Three scoring channels (additive):
+   *   1. memory.keywords ∩ query keywords — canonical mds-core 5.11 field
+   *      (preferred when populated; works across TH/EN since both languages
+   *      land in the same keyword set).
+   *   2. content-string substring match — legacy fallback for memories
+   *      without explicit keywords (most messages from handleUserMessage).
+   *   3. subject match — small bonus when a query word names the subject.
+   *
+   * Bilingual name-question expansion: when the query contains any of
+   * {name, ชื่อ, called, เรียก}, identity-tagged memories (subject =
+   * 'user_name') get a strong score boost so they always surface above
+   * unrelated chatter — across language boundaries.
    */
   private findRelevantMemories(entity: Entity, keywords: string[]): Memory[] {
     if (!entity.memory) return []
@@ -153,10 +166,27 @@ export class ContextAnalyzer {
     const allMemories = entity.memory.recall()
     const relevant: Array<{ memory: Memory, score: number }> = []
 
+    const NAME_QUERY_TOKENS = new Set([
+      'name', 'ชื่อ', 'called', 'เรียก',
+      'remember', 'recall', 'จำ',
+      'who', 'ใคร',
+      'know', 'รู้จัก',
+    ])
+    const isNameQuery = keywords.some(k => NAME_QUERY_TOKENS.has(k))
+
     for (const memory of allMemories) {
       let score = 0
 
-      // Check if memory content contains keywords
+      // 1. memory.keywords field (mds-core canonical)
+      const memKeywords = (memory as any).keywords as string[] | undefined
+      if (memKeywords && memKeywords.length > 0) {
+        const memKwSet = new Set(memKeywords.map(k => k.toLowerCase()))
+        for (const keyword of keywords) {
+          if (memKwSet.has(keyword)) score += 2
+        }
+      }
+
+      // 2. content substring fallback (legacy untagged memories)
       const contentStr = JSON.stringify(memory.content).toLowerCase()
       for (const keyword of keywords) {
         if (contentStr.includes(keyword)) {
@@ -164,9 +194,15 @@ export class ContextAnalyzer {
         }
       }
 
-      // Check if memory subject matches keywords
+      // 3. subject match bonus
       if (keywords.includes(memory.subject.toLowerCase())) {
         score += 2
+      }
+
+      // Bilingual name-question expansion: identity memories surface
+      // regardless of which language the question was asked in.
+      if (isNameQuery && memory.subject === 'user_name') {
+        score += 5
       }
 
       // Weight by salience

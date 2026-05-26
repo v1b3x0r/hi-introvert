@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Box, useApp } from 'ink'
 import { WorldSession } from '../../session/WorldSession.js'
 import { Banner } from './Banner.js'
@@ -29,6 +29,9 @@ export const App: React.FC = () => {
   const [battery, setBattery] = useState<number | null>(null)
   const [showBanner, setShowBanner] = useState(true)
   const [, forceUpdate] = useState(0)
+  // Autosave needs the latest messages from a stable ref (setInterval
+  // captures messages once otherwise) so we keep messagesRef in sync.
+  const messagesRef = useRef<Message[]>([])
 
   useEffect(() => {
     const loadResult = session.loadSessionWithHistory()
@@ -78,6 +81,18 @@ export const App: React.FC = () => {
       }
     })
 
+    // Surface identity capture so user sees confirmation when companion
+    // catches their name (parallel to vocab [learned] notice).
+    session.on('identity', (data: { name: string }) => {
+      if (!data?.name) return
+      setMessages(prev => [...prev, {
+        type: 'system',
+        sender: 'system',
+        text: `[identity] ${data.name}`,
+        timestamp: Date.now(),
+      }])
+    })
+
     // Proactive introvert — companion speaks unprompted every 15–45s when autonomous
     const stopAutonomous = scheduleAutonomous(async () => {
       const companion = session.companionEntity?.entity
@@ -94,8 +109,26 @@ export const App: React.FC = () => {
       forceUpdate(n => n + 1)
     })
 
-    return () => { stopAutonomous() }
+    // Autosave: persist every 30s using the latest messages. Prior behaviour
+    // saved only on /exit, so a SIGINT/terminal-close dropped recent words.
+    // Saves via WithHistory so the message log is preserved too.
+    const autosaveTimer = setInterval(() => {
+      try {
+        session.saveSessionWithHistory(undefined, messagesRef.current)
+      } catch { /* swallow — autosave failures must not crash the UI */ }
+    }, 30000)
+
+    return () => {
+      stopAutonomous()
+      clearInterval(autosaveTimer)
+    }
   }, [session])
+
+  // Keep messagesRef in sync with state so the autosave interval reads
+  // the latest log instead of the closure snapshot taken at mount.
+  useEffect(() => {
+    messagesRef.current = messages
+  }, [messages])
 
   const sys = (text: string) =>
     setMessages(prev => [...prev, { type: 'system', sender: 'system', text, timestamp: Date.now() }])

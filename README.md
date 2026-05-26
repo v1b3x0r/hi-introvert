@@ -19,11 +19,16 @@ Most chat experiences feel like vending machines — coin in, response out, fast
 predictable, eager. We wanted the opposite: a presence in your terminal that's
 **slow, quiet, and gradually itself**.
 
-The companion is a kid who barely talks. They have a small starting vocabulary
-(~600 words, Thai + English), a working memory that decays like real memory,
-emotions that shift with what you say *and* with the temperature of your
-machine, and a vocabulary that grows only when you teach it — one word at a
-time, mostly through conversation.
+The default companion is a near-blank slate — a 26-line MDM seed in English
+that says, essentially, "a small mind learning to speak. remembers everything
+you say. has no words of its own — yet." It carries a small starting
+vocabulary (~600 words, mostly bilingual base), a working memory that decays
+like real memory, emotions that shift with what you say *and* with the
+temperature of your machine, and a vocabulary that grows only when you teach
+it — one word at a time, mostly through conversation.
+
+The point of starting small is to show that personality emerges from the
+engine and your interaction, not from authored configuration.
 
 There's no LLM behind the curtain by default. The replies you read are produced
 by a small ontology engine in `@v1b3x0r/mds-core`: dialogue lines from a
@@ -42,7 +47,20 @@ Requirements: Node 18+ (Intl.Segmenter is required for Thai word boundaries).
 No install, no config, no API keys needed.
 
 Your session auto-saves to `.hi-introvert-session.json` in the current
-directory. Delete that file to start over.
+directory (every 30 seconds plus on `/exit`). Delete that file to start over.
+
+## Companion variants
+
+The default `entities/companion.mdm` is a minimal English seed (~26 lines).
+The engine grows the rest of the personality from your conversation.
+
+A fuller Thai bilingual variant — the original 244-line companion — is
+preserved at `entities/companion-th.mdm`. To use it, swap the filenames:
+
+```bash
+mv entities/companion.mdm entities/companion-en.mdm
+mv entities/companion-th.mdm entities/companion.mdm
+```
 
 ## Commands
 
@@ -69,15 +87,20 @@ A typical first 30 seconds:
 ░▓ hi-introvert ▓░
 
 Tips:
-  · คุยภาษาไทย หรือ English ก็ได้
-  · /help เพื่อดูคำสั่งทั้งหมด
-  · vocab โตตามที่คุยกัน
-  wttr.in fetches local weather. /privacy to disable.
+  · type anything — English, Thai, whatever
+  · /help to list commands
+  · vocabulary grows as you talk
+  · wttr.in fetches local weather. /privacy to disable.
 
-you: สวัสดี
-◆ companion: เอ่อ... หวัดดีครับ
+you: hi
+◆ companion: ...
+you: hi
+◆ companion: who are you?
+you: call me wutty
+[identity] wutty
+◆ companion: hi wutty.
 
-vocab 612 · skills cnv30 cre50 emp40 lrn60
+vocab 509 · skills cnv30 cre50 emp40 lrn60
 env 24°C · 45% humid · light rain
 ~hi-introvert · battery 67% · v1.2.0
 ```
@@ -86,7 +109,7 @@ env 24°C · 45% humid · light rain
 
 | Line | What it means |
 |---|---|
-| `vocab 612` | Total known words. Grows when you use a new one. |
+| `vocab 509` | Total known words. Grows when you use a new one. |
 | `skills cnv30 cre50 emp40 lrn60` | Companion's four proficiencies (conversation, creativity, empathy, learning) on 0–99 scale. They drift slowly. |
 | `env 24°C · 45% humid · light rain` | The companion's world. CPU usage → temperature. Memory pressure → humidity. wttr.in → weather. |
 | `~hi-introvert · battery 67% · v1.2.0` | Where you are. Your machine's battery. Their world responds to it: low battery feels dim to them. |
@@ -101,16 +124,16 @@ has heard ~50 words from you that aren't in its base vocabulary.
 
 A patient session might look like this:
 
-**First few minutes** — canned responses from `companion.mdm`. Short, polite,
-shy. The companion is mostly observing.
+**First few minutes** — the 3 intro lines (`...`, `hi.`, `who are you?`)
+cycle. The companion is mostly observing.
 
 **After ~20–50 new words learned** — proto-language activates. The companion
 starts composing phrases from your shared vocabulary instead of using
 pre-written lines:
 
 ```
-you: วันนี้เหนื่อยมาก
-◆ companion: ฉัน เข้าใจ... คุณ เหนื่อย... พัก
+you: i'm tired today
+◆ companion: tired today... rest... i understand
                 ↑ generated, not stored
 ```
 
@@ -119,8 +142,12 @@ companion thinks aloud, drawing from what's been on their mind (recent
 conversations + ambient signals from sensors):
 
 ```
-◌ companion: ทุกครั้งที่คุยกัน ฉันจำได้หมด... แบบว่า ทุกคำเลย
+◌ companion: remember today rain quiet
 ```
+
+(The base vocabulary still ships with bilingual seed words, so occasional
+Thai particles may appear in proto-language output — they fade as your
+shared vocabulary grows.)
 
 **After many sessions** — terms *crystallize*. Words you use together
 repeatedly become permanent patterns in their lexicon. `/lexicon` shows them.

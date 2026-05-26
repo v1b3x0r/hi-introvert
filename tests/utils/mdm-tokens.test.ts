@@ -77,9 +77,14 @@ describe('extractCompanionTokens', () => {
     expect(out.length).toBeGreaterThan(0)
   })
 
-  test('exercises real companion.mdm — produces non-empty set after BASE_VOCABULARY filter', async () => {
+  test('exercises real companion-th.mdm — produces non-empty set after BASE_VOCABULARY filter', async () => {
+    // The default companion.mdm is now the minimal English seed (~26 lines)
+    // with near-zero authored tokens — that's the showcase. We exercise the
+    // extractor against the preserved Thai bilingual variant (companion-th.mdm)
+    // which still carries authored vocabulary, so this test continues to
+    // guard the extraction pipeline against regressions.
     const { BASE_VOCABULARY } = await import('../../src/vocabulary/base-vocabulary')
-    const companionMDM = (await import('../../entities/companion.mdm', { with: { type: 'json' } })).default
+    const companionMDM = (await import('../../entities/companion-th.mdm', { with: { type: 'json' } })).default
     const out = extractCompanionTokens(companionMDM, BASE_VOCABULARY)
     process.stderr.write(`[mdm-tokens] companion-specific count: ${out.length}\n`)
     process.stderr.write(`[mdm-tokens] sample: ${JSON.stringify(out.slice(0, 10))}\n`)

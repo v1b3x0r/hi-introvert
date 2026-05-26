@@ -1,18 +1,20 @@
 /**
  * E1 integration: companion-specific MDM tokens reach the proto-language
- * pool, so emergent autonomous output can use words like เงียบ/ลึก/ภายใน
- * (companion voice) instead of only kid-language base vocab.
+ * pool, so emergent autonomous output can use authored vocabulary
+ * (companion voice) alongside user-learned words.
  *
- * Group-level assertion across 100 autonomous-message attempts:
- * at least one companion-specific token surfaces somewhere in the
- * collected output. Not flaky as long as wiring is correct.
+ * The default companion.mdm is now the minimal English seed (~26 lines)
+ * with near-zero authored tokens — that's the showcase. These tests
+ * therefore verify the *wiring* (extract → cache → pool → output) by
+ * deriving expected cache content from whatever MDM is currently loaded,
+ * and by injecting synthetic tokens for the integration check.
  */
 
 import { test, expect, beforeAll } from 'bun:test'
 import { unlinkSync, existsSync } from 'fs'
 
 const SESSION_FILE = '.hi-introvert-session.json'
-const COMPANION_TOKENS_OF_INTEREST = ['เงียบ', 'ลึก', 'ภายใน', 'บางที', 'เรียนรู้', 'รู้สึก']
+const INJECTED_TOKENS = ['quiet-marker-token-a', 'quiet-marker-token-b', 'quiet-marker-token-c']
 
 beforeAll(() => {
   console.log = () => {}
@@ -23,25 +25,34 @@ beforeAll(() => {
   }
 })
 
-test('companionTokens cache is non-empty and contains expected words', async () => {
+test('companionTokens cache reflects extractCompanionTokens(MDM, BASE_VOCABULARY)', async () => {
   const { WorldSession } = await import('../../src/session/WorldSession')
+  const { extractCompanionTokens } = await import('../../src/utils/mdm-tokens')
+  const { BASE_VOCABULARY } = await import('../../src/vocabulary/base-vocabulary')
+  const companionMDM = (await import('../../entities/companion.mdm', { with: { type: 'json' } })).default
+
   const session = new WorldSession()
   session.setSilentMode(true)
 
-  // Access the cached tokens via type-cheat for assertion purposes
+  // The constructor wiring populates `companionTokens` from
+  // extractCompanionTokens(companionMDM, BASE_VOCABULARY). Re-derive and
+  // compare — this tests the wiring without asserting specific MDM content.
+  const expected = extractCompanionTokens(companionMDM, BASE_VOCABULARY)
   const tokens = (session as any).companionTokens as string[]
-  expect(Array.isArray(tokens)).toBe(true)
-  expect(tokens.length).toBeGreaterThan(5)
 
-  const surviving = COMPANION_TOKENS_OF_INTEREST.filter(t => tokens.includes(t))
-  process.stderr.write(`[vocab-seeding] cache size=${tokens.length}, surviving=${JSON.stringify(surviving)}\n`)
-  expect(surviving.length).toBeGreaterThanOrEqual(1)
+  expect(Array.isArray(tokens)).toBe(true)
+  expect(tokens).toEqual(expected)
+  process.stderr.write(`[vocab-seeding] cache size=${tokens.length}\n`)
 })
 
-test('group-level: at least one companion token appears in 100 autonomous outputs', async () => {
+test('group-level: injected companion tokens surface in 100 autonomous outputs', async () => {
   const { WorldSession } = await import('../../src/session/WorldSession')
   const session = new WorldSession()
   session.setSilentMode(true)
+
+  // Inject synthetic tokens to test the cache→pool→output pipeline
+  // regardless of which MDM is loaded as default.
+  ;(session as any).companionTokens = INJECTED_TOKENS
 
   // Force vocab size above E2's threshold so proto-lang can engage.
   for (let i = 0; i < 60; i++) {
@@ -57,12 +68,10 @@ test('group-level: at least one companion token appears in 100 autonomous output
   }
 
   const combined = all.join(' ')
-  const seen = COMPANION_TOKENS_OF_INTEREST.filter(t => combined.includes(t))
+  const seen = INJECTED_TOKENS.filter(t => combined.includes(t))
 
   process.stderr.write(`[vocab-seeding] 100 outputs produced ${all.length} non-null replies\n`)
-  process.stderr.write(`[vocab-seeding] tokens observed: ${JSON.stringify(seen)}\n`)
+  process.stderr.write(`[vocab-seeding] injected tokens observed: ${JSON.stringify(seen)}\n`)
 
-  // The unification claim: at least one companion-specific token should
-  // surface across 100 outputs. If E1 wiring works, this is comfortable.
   expect(seen.length).toBeGreaterThanOrEqual(1)
 }, 30000)

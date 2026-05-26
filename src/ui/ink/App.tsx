@@ -121,6 +121,9 @@ export const App: React.FC = () => {
     return () => {
       stopAutonomous()
       clearInterval(autosaveTimer)
+      // Stop every session-owned interval so Ctrl+C / SIGINT exits the
+      // process cleanly on the first signal instead of leaking timers.
+      session.shutdown()
     }
   }, [session])
 
@@ -211,10 +214,13 @@ export const App: React.FC = () => {
       case 'exit':
       case 'quit':
         session.saveSessionWithHistory(undefined, messages)
+        session.shutdown()
         exit()
         break
-      case 'history':
       case 'lexicon':
+        sys(session.getLexiconSummary())
+        break
+      case 'history':
       case 'spawn':
       case 'autosave':
         sys(`/${command} not yet wired in ink shell — coming soon`)

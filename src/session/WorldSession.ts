@@ -151,6 +151,14 @@ export class WorldSession extends EventEmitter {
   memoryLogs: Map<string, MemoryLog>          // CRDT-based distributed memory (Task 8)
   trustSystems: Map<string, TrustSystem>      // Trust & Privacy per entity (Task 9)
 
+  /**
+   * Captured handles for every setInterval started by the session, so
+   * `shutdown()` can clear them. Without this the host process keeps
+   * running after the UI unmounts — /exit and /quit then required a
+   * second Ctrl+C because Node's event loop was still alive.
+   */
+  private _intervals: ReturnType<typeof setInterval>[] = []
+
   constructor() {
     super()  // Call EventEmitter constructor
     // Initialize World with full features + LLM
@@ -252,12 +260,12 @@ export class WorldSession extends EventEmitter {
     this.setupEnvironmentSensors()
 
     // Auto-tick world
-    setInterval(() => {
+    this.setInt(() => {
       this.world.tick(1 / 2)  // 2 FPS
     }, 500)
 
     // Autosave every 30 seconds
-    setInterval(() => {
+    this.setInt(() => {
       if (this.autoSaveEnabled) {
         this.saveSession()
       }
@@ -269,6 +277,26 @@ export class WorldSession extends EventEmitter {
    */
   setSilentMode(silent: boolean) {
     this.silentMode = silent
+  }
+
+  /**
+   * Tracked setInterval — captures the handle so shutdown() can clear it.
+   * Always use this instead of bare setInterval inside the session.
+   */
+  private setInt(fn: () => void | Promise<void>, ms: number) {
+    const id = setInterval(fn, ms)
+    this._intervals.push(id)
+    return id
+  }
+
+  /**
+   * Stop every interval the session started + remove all event listeners,
+   * so the host process can exit cleanly after the UI unmounts.
+   */
+  shutdown() {
+    for (const id of this._intervals) clearInterval(id)
+    this._intervals = []
+    this.removeAllListeners()
   }
 
   /**
@@ -405,7 +433,7 @@ export class WorldSession extends EventEmitter {
     })
 
     // Time-of-day sensor (broadcast every 30 seconds)
-    setInterval(() => {
+    this.setInt(() => {
       const now = new Date()
       const hour = now.getHours()
       const minute = now.getMinutes()
@@ -438,7 +466,7 @@ export class WorldSession extends EventEmitter {
 
     // Session duration (broadcast every 5 minutes)
     const startTime = Date.now()
-    setInterval(() => {
+    this.setInt(() => {
       const duration = Date.now() - startTime
       const minutes = Math.floor(duration / 60000)
 
@@ -465,12 +493,12 @@ export class WorldSession extends EventEmitter {
 
     // v6.2: Longing field check (every 2 minutes)
     // Companion may miss traveler if high familiarity but no recent interaction
-    setInterval(() => {
+    this.setInt(() => {
       this.spawnLongingField(this.companionEntity, 'traveler')
     }, 120000)  // 2 minutes
 
     // v6.2: OS Environment sensor (update every 10 seconds)
-    setInterval(() => {
+    this.setInt(() => {
       const metrics = this.osSensor.getMetrics()
       const envMapping = this.osSensor.mapToEnvironment(metrics)
 
@@ -522,7 +550,7 @@ export class WorldSession extends EventEmitter {
     }, 10000)  // 10 seconds
 
     // v6.2: Weather system update (every 2 seconds)
-    setInterval(() => {
+    this.setInt(() => {
       // Update weather state
       this.weather.update(2)  // 2 seconds dt
 
@@ -568,7 +596,7 @@ export class WorldSession extends EventEmitter {
     }, 2000)  // 2 seconds
 
     // v6.2: Memory Consolidation (every 1 minute)
-    setInterval(() => {
+    this.setInt(() => {
       const companion = this.companionEntity.entity
 
       // Consolidate companion memories
@@ -598,7 +626,7 @@ export class WorldSession extends EventEmitter {
     }, 60000)  // 1 minute
 
     // v6.2: Energy + Collision system (every 1 second)
-    setInterval(() => {
+    this.setInt(() => {
       const allEntities = Array.from(this.entities.values()).map(info => info.entity)
 
       // 1. Check for collision (proximity-based, headless mode)
@@ -672,7 +700,7 @@ export class WorldSession extends EventEmitter {
     }, 1000)  // 1 second
 
     // v6.2: World Mind analytics (every 30 seconds) - Task 12
-    setInterval(() => {
+    this.setInt(() => {
       const allEntities = Array.from(this.entities.values()).map(info => info.entity)
 
       // Use static methods
@@ -688,7 +716,7 @@ export class WorldSession extends EventEmitter {
     }, 30000)
 
     // v1.2: Moon phase sensor (every hour, pure compute)
-    setInterval(() => {
+    this.setInt(() => {
       const moon = computeMoonPhase()
       this.world.broadcastEvent('lunar_phase', moon)
       this.emit('lunar_phase', moon)
@@ -706,7 +734,7 @@ export class WorldSession extends EventEmitter {
     }, 60 * 60 * 1000)
 
     // v1.2: Local context sensor (every 30s, no network)
-    setInterval(() => {
+    this.setInt(() => {
       if (!this.privacySettings.localContextEnabled) return
       const ctx = readLocalContext()
       this.world.broadcastEvent('local_context', ctx)
@@ -725,7 +753,7 @@ export class WorldSession extends EventEmitter {
     }, 30 * 1000)
 
     // v1.2: Outside weather sensor (every 10min, silent network fail)
-    setInterval(async () => {
+    this.setInt(async () => {
       if (!this.privacySettings.outsideWeatherEnabled) return
       const weather = await fetchWeather()
       if (!weather) return
@@ -1398,6 +1426,39 @@ export class WorldSession extends EventEmitter {
       response,
       emotion: { ...companion.emotion }
     }
+  }
+
+  /**
+   * Get lexicon summary — emergent terms the companion has crystallized
+   * from repeated co-occurrence in your speech. Shows the top-weighted
+   * patterns with their usage count.
+   */
+  getLexiconSummary(): string {
+    const stats = this.world.getLexiconStats()
+    if (!stats || stats.totalTerms === 0) {
+      return '🗣️ Lexicon\n\n  no crystallized terms yet — keep talking, patterns surface after repeated co-occurrence.'
+    }
+
+    const patterns = this.world.lexicon?.getAll?.() ?? []
+    const top = patterns
+      .filter((p: any) => p && typeof p.phrase === 'string' && p.phrase.length > 0)
+      .sort((a: any, b: any) => (b.weight ?? 0) - (a.weight ?? 0))
+      .slice(0, 12)
+
+    const lines = [
+      '🗣️ Lexicon',
+      '',
+      `  Terms crystallized: ${stats.totalTerms}`,
+      `  Total usage: ${stats.totalUsage}`,
+      '',
+      '  Top patterns:'
+    ]
+    for (const p of top) {
+      const weight = (p.weight ?? 0).toFixed(2)
+      const usage = p.usageCount ?? p.usage ?? '?'
+      lines.push(`    "${p.phrase}"  weight ${weight}  ·  used ${usage}`)
+    }
+    return lines.join('\n')
   }
 
   /**

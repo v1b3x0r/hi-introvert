@@ -12,8 +12,10 @@
     "bin",
     "entities",
     "src",
-    "README.md"
+    "README.md",
+    "README.npm.md"
   ],
+  "readme": "README.npm.md",
   "scripts": {
     "dev": "bun run src/index.tsx",
     "build": "bun build src/index.tsx --outdir dist --target node --format esm --external @v1b3x0r/mds-core --external ink-big-text --external cfonts --define process.env.DEV=\"'false'\"",

@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640">
+  <!-- background -->
+  <rect width="1280" height="640" fill="#0a0a0a"/>
+
+  <!-- subtle grid (terminal feel) -->
+  <g stroke="#141414" stroke-width="1">
+    <line x1="0"    y1="80"  x2="1280" y2="80"/>
+    <line x1="0"    y1="560" x2="1280" y2="560"/>
+    <line x1="80"   y1="0"   x2="80"   y2="640"/>
+    <line x1="1200" y1="0"   x2="1200" y2="640"/>
+  </g>
+
+  <!-- terminal header bar -->
+  <g transform="translate(80, 80)">
+    <circle cx="14"  cy="14" r="6" fill="#3a3a3a"/>
+    <circle cx="38"  cy="14" r="6" fill="#3a3a3a"/>
+    <circle cx="62"  cy="14" r="6" fill="#3a3a3a"/>
+    <text x="120" y="20" fill="#666" font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="14" letter-spacing="0.5">
+      ~/hi-introvert
+    </text>
+  </g>
+
+  <!-- name + version -->
+  <text x="80" y="220"
+        fill="#f4f4f4"
+        font-family="ui-monospace, SF Mono, Menlo, monospace"
+        font-size="64"
+        font-weight="700"
+        letter-spacing="-1">
+    hi-introvert
+  </text>
+  <text x="80" y="260"
+        fill="#444"
+        font-family="ui-monospace, SF Mono, Menlo, monospace"
+        font-size="18">
+    v1.2.8 · mit
+  </text>
+
+  <!-- tagline -->
+  <text x="80" y="340"
+        fill="#d8d8d8"
+        font-family="ui-monospace, SF Mono, Menlo, monospace"
+        font-size="32"
+        font-weight="500">
+    a companion that remembers
+  </text>
+  <text x="80" y="384"
+        fill="#d8d8d8"
+        font-family="ui-monospace, SF Mono, Menlo, monospace"
+        font-size="32"
+        font-weight="500">
+    everything you say.
+  </text>
+
+  <!-- install line -->
+  <g transform="translate(80, 450)">
+    <rect x="0" y="0" width="380" height="56" rx="6" fill="#1a1a1a" stroke="#2a2a2a"/>
+    <text x="20" y="35"
+          fill="#9ae6b4"
+          font-family="ui-monospace, SF Mono, Menlo, monospace"
+          font-size="22"
+          font-weight="500">
+      $ npx hi-introvert
+    </text>
+  </g>
+
+  <!-- bullet promises -->
+  <g font-family="ui-monospace, SF Mono, Menlo, monospace" font-size="16" fill="#777">
+    <text x="80"  y="550">no llm.</text>
+    <text x="180" y="550">no cloud.</text>
+    <text x="300" y="550">no login.</text>
+    <text x="420" y="550">just terminal.</text>
+  </g>
+
+  <!-- small companion glyph (top right) -->
+  <g transform="translate(1080, 220)" font-family="ui-monospace, SF Mono, Menlo, monospace" fill="#9ae6b4">
+    <text x="0" y="0" font-size="80" text-anchor="middle">◌</text>
+    <text x="0" y="50" font-size="14" fill="#555" text-anchor="middle">it remembers.</text>
+  </g>
+
+  <!-- footer corner -->
+  <text x="1200" y="610" text-anchor="end"
+        fill="#333"
+        font-family="ui-monospace, SF Mono, Menlo, monospace"
+        font-size="12">
+    github.com/v1b3x0r/hi-introvert
+  </text>
+</svg>

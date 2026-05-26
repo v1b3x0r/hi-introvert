@@ -14,13 +14,15 @@ export const Banner: React.FC<BannerProps> = ({ weatherEnabled }) => (
       <BigText text="hi-introvert" font="tiny" />
     </Gradient>
     <Box flexDirection="column" marginLeft={2}>
+      <Text color={COLORS.systemText} dimColor>  ◌ a small mind learning to speak.</Text>
+      <Text> </Text>
       <Text color={COLORS.systemText}>Tips:</Text>
-      <Text color={COLORS.systemText}>  · คุยภาษาไทย หรือ English ก็ได้</Text>
-      <Text color={COLORS.systemText}>  · /help เพื่อดูคำสั่งทั้งหมด</Text>
-      <Text color={COLORS.systemText}>  · vocab โตตามที่คุยกัน</Text>
+      <Text color={COLORS.systemText}>  · type anything — english, thai, anything</Text>
+      <Text color={COLORS.systemText}>  · /help to list commands</Text>
+      <Text color={COLORS.systemText}>  · vocabulary grows as you teach it</Text>
       {weatherEnabled && (
         <Text color={COLORS.systemText} dimColor>
-          wttr.in fetches local weather. /privacy to disable.
+          ※ wttr.in fetches local weather. /privacy to disable.
         </Text>
       )}
     </Box>

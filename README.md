@@ -1,5 +1,7 @@
 # hi-introvert — repo guide
 
+![hi-introvert](docs/social-card.svg)
+
 A terminal companion experiment. This README is for developers reading the source. For the user-facing intro, see [docs/readme-npm.md](./docs/readme-npm.md) or `npx hi-introvert`.
 
 ```bash

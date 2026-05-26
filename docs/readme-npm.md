@@ -1,5 +1,7 @@
 # hi-introvert
 
+![hi-introvert — a companion that remembers everything you say](https://raw.githubusercontent.com/v1b3x0r/hi-introvert/main/docs/social-card.svg)
+
 **a companion that remembers everything you say.**
 
 no llm. no cloud. no login. just terminal.

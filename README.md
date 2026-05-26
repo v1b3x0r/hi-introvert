@@ -1,6 +1,6 @@
 # hi-introvert — repo guide
 
-A terminal companion experiment. This README is for developers reading the source. For the user-facing intro, see [README.npm.md](./README.npm.md) or `npx hi-introvert`.
+A terminal companion experiment. This README is for developers reading the source. For the user-facing intro, see [docs/readme-npm.md](./docs/readme-npm.md) or `npx hi-introvert`.
 
 ```bash
 git clone https://github.com/v1b3x0r/hi-introvert

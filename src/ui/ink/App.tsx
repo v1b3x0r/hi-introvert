@@ -10,7 +10,7 @@ import { HELP_TEXT } from '../help-text.js'
 import { scheduleAutonomous } from '../../utils/autonomous-scheduler.js'
 import type { Message } from '../../types/index.js'
 
-const VERSION = '1.2.5'
+const VERSION = '1.2.7'
 
 export const App: React.FC = () => {
   const { exit } = useApp()

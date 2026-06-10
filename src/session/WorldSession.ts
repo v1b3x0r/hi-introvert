@@ -37,7 +37,7 @@ import { ContextAnalyzer} from './ContextAnalyzer.js'
 import { MemoryPromptBuilder } from './MemoryPromptBuilder.js'
 import { GrowthTracker } from './GrowthTracker.js'
 import { ProtoLanguageGenerator } from '@v1b3x0r/mds-core'
-import { OSSensor } from '../sensors/OSSensor.js'
+import { OSSensor, applyWeatherToEnvironment, type EnvironmentMapping } from '../sensors/OSSensor.js'
 import { computeMoonPhase } from '../sensors/MoonSensor.js'
 import { readLocalContext } from '../sensors/LocalContextSensor.js'
 import { fetchWeather } from '../sensors/OutsideWeatherSensor.js'
@@ -138,6 +138,7 @@ export class WorldSession extends EventEmitter {
   // v6.2: Environment System
   environment: Environment                     // MDS environment (temperature, light, humidity)
   osSensor: OSSensor                          // OS metrics → environment mapping
+  envBase: EnvironmentMapping | null = null   // Last OS-derived base env (weather composes from this, never from current config)
   weather: Weather                            // Weather system (rain, wind, clouds)
   energySystem: EnergySystem                  // Thermal energy transfer
 
@@ -501,6 +502,7 @@ export class WorldSession extends EventEmitter {
     this.setInt(() => {
       const metrics = this.osSensor.getMetrics()
       const envMapping = this.osSensor.mapToEnvironment(metrics)
+      this.envBase = envMapping  // weather tick composes from this base
 
       // Update MDS Environment dynamically
       this.environment['config'].baseTemperature = envMapping.temperature
@@ -558,16 +560,22 @@ export class WorldSession extends EventEmitter {
 
       // Weather affects environment
       if (weatherState.rain) {
-        // Rain increases humidity, reduces light (cloud cover)
-        this.environment['config'].baseHumidity = Math.min(1, this.environment['config'].baseHumidity + weatherState.rainIntensity * 0.3)
-        this.environment['config'].baseLight = Math.max(0.2, this.environment['config'].baseLight * (1 - weatherState.cloudCover))
-
-        // Wind multiplier
-        const windMult = weatherState.windStrength
-        this.environment['config'].windVelocity = {
-          vx: this.environment['config'].windVelocity.vx * windMult,
-          vy: this.environment['config'].windVelocity.vy * windMult
+        // Compose from the OS-derived BASE (idempotent) — mutating the
+        // current config compounded rain/wind every 2s tick between
+        // OS sensor resets (humidity saturated, wind grew exponentially).
+        const base: EnvironmentMapping = this.envBase ?? {
+          temperature: this.environment['config'].baseTemperature,
+          humidity: this.environment['config'].baseHumidity,
+          light: this.environment['config'].baseLight,
+          windVx: this.environment['config'].windVelocity.vx,
+          windVy: this.environment['config'].windVelocity.vy
         }
+        this.envBase = base  // freeze so pre-first-OS-tick rain can't compound either
+        const composed = applyWeatherToEnvironment(base, weatherState)
+
+        this.environment['config'].baseHumidity = composed.humidity
+        this.environment['config'].baseLight = composed.light
+        this.environment['config'].windVelocity = { vx: composed.windVx, vy: composed.windVy }
 
         // Broadcast rain event
         this.world.broadcastEvent('weather_rain', {

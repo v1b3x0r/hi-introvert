@@ -1,167 +1,64 @@
 # hi-introvert — next session resume
 
-**Last touched:** 2026-05-25 (late evening session)
-**Branch:** `main` (local only, no GitHub remote)
-**HEAD:** `47b1147 chore: address final-review polish items`
-**Tests:** 90 pass / 1 skip / 0 fail · **Bundle:** 2.12 MB
-**Status:** *"companion is alive in a cute way"* — emergence working, name-recall broken
+**Last touched:** 2026-06-10 (Scrutinize + sensor-truth session)
+**Location:** `side-projects/hi-introvert/` (FLAT — the old nested wrapper is gone)
+**Git:** ⚠️ history LOST in the 2026-06-10 folder flatten (dotfiles didn't survive the move). Fresh `git init` on `main`, `.gitignore` recreated, **no commits yet** — founder to make the baseline commit. npm `hi-introvert@1.2.9` (ships `src/`) is the surviving pre-session snapshot.
+**Tests:** 129 pass / 1 skip / 0 fail · **Version:** 1.2.9 (published)
 **Vibe:** side-project, after-hours, treat with humor
 
 ---
 
-## If you're an agent picking this up
+## What changed this session (2026-06-10)
 
-Read in this order (≈10 minutes total):
+### Sensor truth pass — "ทำไม companion บ่นร้อนตลอด" solved
+- **Temperature double-count fixed** (`src/sensors/OSSensor.ts`): old formula added CPU usage twice (directly + via usage-derived `cpuTemp`) → idle read 30°C+, full load 110°C, and the `>30°C → 'ร้อน'/🥵` vocab push fired constantly. Now idle = 20°C neutral, full load = 50°C.
+- **Humidity un-pinned on macOS**: `os.freemem()` counts file cache as used (usage ~0.95 always → humidity ~99%). Now reads `vm_stat` (free+inactive+speculative+purgeable = available) with freemem fallback. Live check: mem 65.6% → humidity 46%.
+- **Weather compounding fixed** (`WorldSession`): the 2s rain tick used to read-modify-write env config (humidity saturated, wind grew exponentially between 10s OS resets). Now composes idempotently from `envBase` via pure `applyWeatherToEnvironment()`.
+- Tests: `tests/OSSensor.test.ts` (9 tests, incl. the "ร้อนเกินจริง" regression).
+- **wttr.in is NOT part of this conflict** — it only broadcasts `outside_weather` events + memories, never writes env config.
 
-1. **This file** — TL;DR + known bugs + mission options (you're here)
-2. **`audit-5.11.md`** — what last session changed + verdict per workaround + 5.12 candidates
-3. **`docs/superpowers/specs/2026-05-25-hi-introvert-mds-511-cleanup-design.md`** — design rationale, especially the "Future Work" section and "directional architecture boundary" in Non-Goals
-4. **`docs/superpowers/plans/2026-05-25-hi-introvert-mds-511-cleanup.md`** — only if you need to know HOW something got built
+### Menu wiring
+- `/history` → `formatEventLog(session.getAllEvents())` (`src/ui/format-events.ts`, last 20 events)
+- `/autosave [on|off]` → wired to `toggleAutoSave()` (no arg = toggle)
+- `/q` → exit alias
+- `/spawn` → still an honest "coming soon" stub (LLM-spawn is real work, deliberately not started)
+- Tests: `tests/commands.test.ts` extended (stub-regression + formatEventLog).
 
-Don't dive into code before audit + spec — they explain what's deliberate vs. accidental, and which "code smells" are actually intentional MVP scope.
+### mds-core 5.12 feedback (engine trace, the "ยกไปปรับปรุง mds" payoff)
+→ **`docs/mds-feedback-512-from-hi-introvert.md`** — 4 findings with file:line evidence:
+1. **F1:** MDM `skills.learnable` parsed then dropped; no trigger dispatch; tick only decays → why skill levels freeze (engine bug)
+2. **F2:** PAD dominance has no event-driven writes (passive drift/jitter/contagion only)
+3. **F3:** engine already has `memory.recallByTopic()` (Jaccard) but consumers reinvent recall; embeddings not wired in
+4. **F4:** Weather→environment composition should ship as a pure idempotent helper in-engine
 
----
+## Status of the old known bugs (from 2026-05-25 file)
 
-## What's working — don't break
-
-Last session shipped **A-tier cleanup + B-tier fixes + E-tier emergence**. Live observation confirmed:
-
-- **E1 vocab seeding** — companion-specific tokens from `companion.mdm` (e.g. `เลย`, `จ้ะ`, `เนอะ`, `บางที`) surface in proto-lang output
-- **E2 priority swap** — proto-lang fires first once vocab ≥ `PROTO_LANG_PRIORITY_THRESHOLD` (= 30); MDM as safety net below
-- **E3 cooldown** — 45s gate between autonomous emissions; `autonomous-skip` event fires for observability; silence is a valid outcome
-- **Mixed Thai+English register coherent** — `อบอุ่น there nervous`, `เลย english จ้ะ` (companion accidentally complains about English — emergent meta-commentary 😅)
-- **Reduplication + stretched words happening** — `ฉลาดดด`, `meet-meet`, `hurttt`, `posttt`
-- **Companion learns user typos as words** — `slilence` (user typo) became a word the companion uses
-
----
-
-## Known bugs from live testing (2026-05-25 evening)
-
-### 🐛 Bug 1 — Name recall doesn't fire (HIGH priority — founder's #1 wish for next session)
-
-**Symptom:**
-```
-you: ผมชื่อ Wutty
-... 50+ conversations later ...
-you: did you remember my name ?
-◆ companion: problem brighter เลย     # not the name
-```
-
-**Diagnosis (informed guess — verify before fixing):**
-- `src/session/ContextAnalyzer.ts:findRelevantMemories()` scores by keyword overlap between the user's keywords and `JSON.stringify(memory.content)`.
-- The question "did you remember my name?" extracts keywords `did/you/remember/name`. The memory storing the name has content like `{intent: 'statement', message: 'ผมชื่อ Wutty'}` — *no overlap with "name"*. Score = 0.
-- Score = 0 → `relevantMemories` empty → `memoryGuidedQuestion` branch (`context.intent === 'question' && context.relevantMemories.length > 0`) never fires.
-- Falls through to generic proto-lang sampling from full pool. "Wutty" *might* surface if the pool is small enough, but with 613-word vocab it's a needle in a haystack.
-
-**Why A5 workaround didn't help:** A5 covers the *pool-filter* bug (when memoryGuidedQuestion DOES fire, generateResponse strips memory tokens). It doesn't help when the branch never fires in the first place.
-
-**Where to investigate:**
-- `src/session/ContextAnalyzer.ts` — `findRelevantMemories()` + `detectIntent()`
-- How `WorldSession.handleUserMessage` stores name-introductions (subject/content shape)
-- `companion.memory.recall()` API in mds-core — does it support semantic search yet, or only by-subject?
-
-**Possible fixes (pick one in next session):**
-- (a) **Semantic similarity scoring** — replace keyword overlap with embedding similarity (mds-core 5.11 has `Similarity Provider` / `EntitySimilarityAdapter` — see CHANGELOG)
-- (b) **Explicit name-question detection** — if intent is question AND keywords include "name/ชื่อ/เรียก", search memories tagged as identity/self
-- (c) **Better memory tagging at write time** — when `handleUserMessage` detects "ผมชื่อ X" / "my name is X", store with `subject: 'user_name'` (not just `subject: 'traveler'`) so retrieval can target it
-
-**Tests to add for fix:**
-- New: `tests/regressions/name-recall-end-to-end.test.ts` — drives the actual conversation
-- Existing: `tests/regressions/a5-question-memory-survives.test.ts` (currently `.skip`) — un-skip if 5.12 lands the upstream fix
-- Existing: `tests/name-recall.test.ts` — already-weakened assertions; tighten once recall works
-
-### 🐛 Bug 2 — Maturity stuck at 0%
-
-**Symptom:** `/growth` stats show `Maturity: 0%` even after 57 conversations.
-
-**Where to investigate:** `src/session/GrowthTracker.ts` — calculation formula or update cadence.
-
-### 🐛 Bug 3 — Skills don't tick
-
-**Symptom:** Skill levels `cnv30 cre50 emp40 lrn60` never change across 57 conversations.
-
-**Where to investigate:**
-- `companion.mdm` declares `skills.learnable` with triggers (`new_word_learned`, `user.emotion_detected`, `conversation_milestone`)
-- mds-core 5.11.1 `companion.skills` API — does it tick automatically on world.tick, or need explicit calls?
-- `WorldSession.handleUserMessage` doesn't seem to fire the trigger events for skills
-
-### ⚠️ Observation 4 — env shows extreme values
-
-`env 36°C · 99% humid · Patchy rain nearby` — that's possible (CPU under load + humid weather), but worth sanity-checking the OS→env mapping if it stays pinned.
+- **Bug 1 name recall** — FIXED in a post-05-25 session (`tests/regressions/name-recall-end-to-end.test.ts` passes; `subject: 'user_name'` tagging)
+- **Bug 2 maturity 0%** — FIXED app-side (reformulated around memory-subject diversity; `tests/maturity.test.ts` passes). Engine-side dominance gap remains → F2.
+- **Bug 3 skills don't tick** — app-side survival-on-load works (`tests/skills-survive-load.test.ts`), but proficiency still can't advance until mds F1 lands. Engine bug, not app bug.
+- **Observation 4 extreme env** — root-caused & fixed (this session's sensor truth pass)
 
 ---
 
-## Next session — mission options
+## Next session — candidates
 
-Pick one or combine. Founder leans toward **A** for next session.
+1. **Founder: baseline commit** (`git add -A && git commit`) — repo currently has zero commits
+2. **Field-feel test** — run `bun run dev`, confirm companion stopped complaining about heat/humidity all day
+3. **mds 5.12 pass in `mds/` repo** — implement F1 (skills trigger dispatch) first; it unblocks hi-introvert skill growth with zero app changes
+4. **/spawn decision** — implement LLM spawn or drop from help
+5. Optional housekeeping (from old file, still pending): deprecate broken `@v1b3x0r/mds-core@5.11.0` on npm; decide GitHub remote; bump to 1.3.0 when E1-E3 feel right
 
-### Option A — Name recall + episodic memory probe (RECOMMENDED, founder's wish)
-
-- Drive the name-recall fix end-to-end: write a failing test → diagnose → choose between (a)/(b)/(c) above → fix → verify
-- While inside `companion.memory.recall()` and friends, **exercise MDS's episodic memory** to verify it does what the design promises (the founder explicitly wants this audit)
-- Outcome: companion answers "what's my name?" + we have a real audit of episodic recall in mds-core 5.11.1
-
-### Option B — C-tier hardcoded mapping cleanup
-
-Per the spec's "Future Work" section. Move data-driven:
-- `WorldSession.categoryMap` (intent → MDM category — most map to categories that don't exist in v6.3 MDM)
-- env→vocab pushes at 2 sites (`if tempC > 30 push 'ร้อน'` etc.)
-- `getEmotionWord` valence→word table
-- `ContextAnalyzer.detectIntent` regex + `estimateEmotionHint` table
-
-Bug 1 (name recall) lives inside this scope — Option B would naturally include it.
-
-### Option C — Skill / Maturity investigation (Bugs 2 + 3)
-
-Smaller scope, mostly diagnostic + one fix or one removal. Good if the founder is short on time.
-
-### Option D — E3-full
-
-The richer cooldown design from the original spec (decay, repetition hashes, source-aware split). Not blocking, but interesting design work.
-
----
-
-## Quick-start commands
+## Quick-start
 
 ```bash
-cd /Users/v1b3_/_dev/project-world-log/hi-introvert-fix/hi-introvert
-git log --oneline | head -5             # confirm HEAD
-bun test 2>&1 | tail -5                 # confirm green baseline
-cat audit-5.11.md                       # load full context
-
-# Run companion interactively:
-bun run dev
-# or
-npx hi-introvert     # NOTE: this fetches the published version (1.2.5),
-                     # not your local edits. Use `bun run dev` for local.
+cd /Users/v1b3_/_dev/project-world-log/side-projects/hi-introvert
+bun install        # node_modules also died in the flatten
+bun test           # expect 129 pass / 1 skip
+bun run dev        # interactive companion (npx hi-introvert = published 1.2.9, not local)
 ```
 
----
-
-## Optional housekeeping (anytime, no rush)
-
-- **Deprecate broken mds-core 5.11.0 on npm** (5.11.1 is the working one):
-  ```bash
-  npm deprecate '@v1b3x0r/mds-core@5.11.0' 'broken publish — missing dist/. Use 5.11.1 or later.'
-  ```
-- **Publish hi-introvert 1.3.0** — only after 2-3 days of self-testing E1/E2/E3 to be sure the cooldown / proto-first behavior feels right
-- **Push to GitHub** — remote not set up yet. Decision deferred.
-- **Bump version in package.json** — still `1.2.5`; should be `1.3.0` next publish (E1/E2/E3 = new features, minor bump)
+Older strata: `audit-5.11.md`, `docs/superpowers/{specs,plans}/2026-05-25-*` (design rationale still valid).
 
 ---
 
-## Memorable quotes from the test session
-
-> `companion: เลย english จ้ะ`
-> (in reply to "How about you environment" — accidentally complaining about English)
-
-> `you: did you remember my name?`
-> `◆ companion: problem brighter เลย`
-> (zen poetry by accident — the bug we're fixing)
-
-> `◌ แม่ slilence`
-> (companion learned the user's typo "slilence" as a real word — emergent vocabulary acquisition working as designed)
-
----
-
-*Generated 2026-05-25. If this file is older than 2 weeks and HEAD has moved, regenerate.*
+*Generated 2026-06-10. If this file is older than 2 weeks and HEAD has moved, regenerate.*

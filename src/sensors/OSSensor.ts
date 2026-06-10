@@ -41,6 +41,52 @@ export interface EnvironmentMapping {
   windVy: number          // pixels/s (mapped from network)
 }
 
+/**
+ * Parse `vm_stat` output into a memory usage ratio (0..1).
+ * macOS `os.freemem()` counts file cache as "used", pinning usage near 1;
+ * here free+inactive+speculative+purgeable pages all count as available.
+ * Returns null when the output is unparseable (caller falls back).
+ */
+export function memoryUsageFromVmStat(output: string, totalMem: number): number | null {
+  const pageSizeMatch = output.match(/page size of (\d+) bytes/)
+  if (!pageSizeMatch) return null
+  const pageSize = parseInt(pageSizeMatch[1])
+
+  const page = (label: string): number => {
+    const m = output.match(new RegExp(`Pages ${label}:\\s+(\\d+)`))
+    return m ? parseInt(m[1]) : 0
+  }
+
+  const availablePages = page('free') + page('inactive') + page('speculative') + page('purgeable')
+  if (availablePages === 0) return null
+
+  const available = availablePages * pageSize
+  return Math.max(0, Math.min(1, (totalMem - available) / totalMem))
+}
+
+export interface WeatherEffects {
+  rain: boolean
+  rainIntensity: number   // 0..1
+  cloudCover: number      // 0..1
+  windStrength: number    // multiplier
+}
+
+/**
+ * Derive weather-affected environment from a BASE mapping.
+ * Pure + idempotent: always computes from base, never from the previous
+ * result — so a fast weather tick can re-apply it without compounding.
+ */
+export function applyWeatherToEnvironment(base: EnvironmentMapping, weather: WeatherEffects): EnvironmentMapping {
+  if (!weather.rain) return { ...base }
+  return {
+    temperature: base.temperature,
+    humidity: Math.min(1, base.humidity + weather.rainIntensity * 0.3),
+    light: Math.max(0.2, base.light * (1 - weather.cloudCover)),
+    windVx: base.windVx * weather.windStrength,
+    windVy: base.windVy * weather.windStrength,
+  }
+}
+
 export class OSSensor {
   private lastCPUInfo: os.CpuInfo[] = []
   private lastCPUTimes: { idle: number, total: number }[] = []
@@ -89,8 +135,11 @@ export class OSSensor {
    */
   mapToEnvironment(metrics: OSMetrics): EnvironmentMapping {
     // CPU → Temperature
-    // Base: 293K (20°C), Range: 283K-323K (10°C-50°C)
-    const temperature = 283 + (metrics.cpuUsage * 40) + (metrics.cpuTemp - 293)
+    // Idle: 293K (20°C neutral), Full load: 323K (50°C).
+    // cpuTemp is itself estimated FROM cpuUsage, so it must not be added
+    // on top of cpuUsage again — doing both double-counts the load
+    // (idle drifted to 30°C and full load to 110°C).
+    const temperature = 293 + (metrics.cpuUsage * 30)
 
     // Memory → Humidity
     // High memory usage = high humidity (heavy, sluggish feeling)
@@ -157,9 +206,23 @@ export class OSSensor {
 
   /**
    * Get memory usage (0..1)
+   * On macOS, os.freemem() counts file cache as used (usage pins near 1,
+   * which pinned environment humidity at ~99%) — prefer vm_stat there.
    */
   private getMemoryUsage(): number {
     const totalMem = os.totalmem()
+
+    if (process.platform === 'darwin') {
+      try {
+        const { execSync } = require('child_process')
+        const output = execSync('vm_stat', { encoding: 'utf-8' })
+        const usage = memoryUsageFromVmStat(output, totalMem)
+        if (usage !== null) return usage
+      } catch (error) {
+        // Fall through to os.freemem()
+      }
+    }
+
     const freeMem = os.freemem()
     return (totalMem - freeMem) / totalMem
   }

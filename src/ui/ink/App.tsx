@@ -7,6 +7,7 @@ import { StatusRow } from './StatusRow.js'
 import { InputBox } from './InputBox.js'
 import { Footer } from './Footer.js'
 import { HELP_TEXT } from '../help-text.js'
+import { formatEventLog } from '../format-events.js'
 import { scheduleAutonomous } from '../../utils/autonomous-scheduler.js'
 import type { Message } from '../../types/index.js'
 
@@ -213,6 +214,7 @@ export const App: React.FC = () => {
       }
       case 'exit':
       case 'quit':
+      case 'q':
         session.saveSessionWithHistory(undefined, messages)
         session.shutdown()
         exit()
@@ -221,8 +223,20 @@ export const App: React.FC = () => {
         sys(session.getLexiconSummary())
         break
       case 'history':
+        sys(formatEventLog(session.getAllEvents()))
+        break
+      case 'autosave': {
+        const sub = args[0]
+        if (sub === 'on' || sub === 'off') {
+          const desired = sub === 'on'
+          if (session.isAutoSaveEnabled() !== desired) session.toggleAutoSave()
+        } else {
+          session.toggleAutoSave()
+        }
+        sys(`autosave: ${session.isAutoSaveEnabled() ? 'on' : 'off'}`)
+        break
+      }
       case 'spawn':
-      case 'autosave':
         sys(`/${command} not yet wired in ink shell — coming soon`)
         break
       default:

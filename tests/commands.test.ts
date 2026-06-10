@@ -15,6 +15,7 @@ const ROOT = join(import.meta.dir, '..')
 const EXPECTED_COMMANDS = [
   'help', 'status', 'growth', 'lexicon',
   'history', 'save', 'load', 'clear', 'exit', 'privacy',
+  'autosave', 'q',
 ] as const
 
 function extractCaseLabels(source: string): Set<string> {
@@ -33,6 +34,36 @@ describe('slash command dispatcher', () => {
       expect(labels.has(cmd)).toBe(true)
     })
   }
+})
+
+describe('stub commands actually got wired', () => {
+  const source = readFileSync(join(ROOT, 'src/ui/ink/App.tsx'), 'utf-8')
+
+  test('/history and /autosave are no longer "not yet wired" stubs', () => {
+    const stubIdx = source.indexOf('not yet wired')
+    if (stubIdx === -1) return // no stub block left at all — fine
+    const stubCases = source.slice(Math.max(0, stubIdx - 250), stubIdx)
+    expect(stubCases).not.toContain("'history'")
+    expect(stubCases).not.toContain("'autosave'")
+  })
+})
+
+describe('formatEventLog', () => {
+  test('empty log says there are no events yet', async () => {
+    const { formatEventLog } = await import('../src/ui/format-events')
+    expect(formatEventLog([])).toContain('no world events yet')
+  })
+
+  test('renders event types, most recent last, capped at 20', async () => {
+    const { formatEventLog } = await import('../src/ui/format-events')
+    const events = Array.from({ length: 30 }, (_, i) => ({
+      time: i, type: `event_${i}`, data: { i },
+    }))
+    const out = formatEventLog(events)
+    expect(out).toContain('event_29')      // newest kept
+    expect(out).not.toContain('event_5 ')  // oldest dropped (>20 back)
+    expect(out).toContain('last 20 of 30')
+  })
 })
 
 describe('help text', () => {

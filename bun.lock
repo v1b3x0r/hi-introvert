@@ -4,7 +4,7 @@
     "": {
       "name": "hi-introvert",
       "dependencies": {
-        "@v1b3x0r/mds-core": "^5.11.1",
+        "@v1b3x0r/mds-core": "^5.12.0",
         "ink": "^5.0.1",
         "ink-big-text": "^2.0.0",
         "ink-gradient": "^3.0.0",
@@ -33,7 +33,7 @@
 
     "@types/tinycolor2": ["@types/tinycolor2@1.4.6", "", {}, "sha512-iEN8J0BoMnsWBqjVbWH/c0G0Hh7O21lpR2/+PrvAVgWdzL7eexIFm4JN/Wn10PTcmNdtS6U67r499mlWMXOxNw=="],
 
-    "@v1b3x0r/mds-core": ["@v1b3x0r/mds-core@5.11.1", "", {}, "sha512-As3qPSg1kokC6zEa3xCfK4RLcM331z/Dt2uHgYD6NZpP15y8VguwPldw9wuVBTfDZUXKhWSeNQLvIVeOGw6nrQ=="],
+    "@v1b3x0r/mds-core": ["@v1b3x0r/mds-core@5.12.0", "", {}, "sha512-dyWQs2sYz4G4batSKDTZNPVS+JbAQeGHeeAlM4IHH0LhGBjEUECdC6+ClRZAMj9Wa1eZ1JWKt2LVXEnEL65rcg=="],
 
     "ansi-escapes": ["ansi-escapes@7.3.0", "", { "dependencies": { "environment": "^1.0.0" } }, "sha512-BvU8nYgGQBxcmMuEeUEmNTvrMVjJNSH7RgW24vXexN4Ven6qCvy4TntnvlnwnMLTVlcRQQdbRY8NKnaIoeWDNg=="],
 

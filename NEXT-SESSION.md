@@ -40,13 +40,22 @@
 
 ---
 
+## F1 LANDED → MERGED (same evening, founder-mode run)
+
+- ✅ Baseline commit `7d96d7e` made; field-test confirmed sensor values sane in `bun run dev`
+- ✅ **F1 MERGED to mds main** — PR #16 (`2a41e91`) after a 5-round codex loop (condition eval / row-key edge state / bare-flag dual-mode / flat dot-keys / duration suffixes — all TDD'd, `skill-triggers.test.ts` 17/17). PR #17 (`096ccd8`) added `docs/FIELD-GUIDE.md` + social card + README refresh (codex "Hooray").
+- ✅ **hi-introvert side wired** (uncommitted): `companion.mdm` got `skills.learnable` (empathy←`user.emotion_detected` 0.05, learning←`new_word_learned` 0.02, conversation←`conversation_milestone` 0.03); `WorldSession` broadcasts those 3 events at the semantic sites. E2E `tests/skill-growth.test.ts` 4/4 — **skips gracefully on engines without F1** so published 5.11.1 stays green.
+- 📈 20-turn simulation: `con30 cre50 emp40 lea60` → `con34 cre50 emp64 lea67` (creativity = control, no trigger declared). Static → evolving personality.
+- ⚠️ **Link topology:** hi-introvert `node_modules/@v1b3x0r/mds-core` is `bun link`ed to local `mds/` (package.json untouched). `bun install` reverts to npm 5.11.1 → growth tests auto-skip. Publish mds 5.12 to make it durable.
+
 ## Next session — candidates
 
-1. **Founder: baseline commit** (`git add -A && git commit`) — repo currently has zero commits
-2. **Field-feel test** — run `bun run dev`, confirm companion stopped complaining about heat/humidity all day
-3. **mds 5.12 pass in `mds/` repo** — implement F1 (skills trigger dispatch) first; it unblocks hi-introvert skill growth with zero app changes
+1. **Commit hi-introvert F1 wiring** — companion.mdm skills block + WorldSession broadcasts + skill-growth test + tiers doc are green but uncommitted here (mds side is merged)
+2. **mds 5.12 release** — version bump + CHANGELOG + publish; then unlink + `bun add @v1b3x0r/mds-core@5.12` here; hi-introvert → **1.3.0** (behavior change, per founder call)
+3. **Tune growth feel** — live with it a few days; growth rates (0.05/0.02/0.03) are first guesses; maybe a trigger for creativity (proto-lang emission?). Read `docs/skill-growth-tiers.md` first — current empathy wiring is a Tier-1 proxy; real empathy/reflection growth needs the Tier-2 conversation evaluator, trust/maturity need the Tier-3 longitudinal pass.
 4. **/spawn decision** — implement LLM spawn or drop from help
-5. Optional housekeeping (from old file, still pending): deprecate broken `@v1b3x0r/mds-core@5.11.0` on npm; decide GitHub remote; bump to 1.3.0 when E1-E3 feel right
+5. Optional housekeeping: deprecate broken `@v1b3x0r/mds-core@5.11.0` on npm; decide GitHub remote
+6. Remaining mds 5.12 feedback items: F2 dominance triggers, F3 recallByTopic adoption, F4 weather composer (see docs/mds-feedback-512-from-hi-introvert.md)
 
 ## Quick-start
 

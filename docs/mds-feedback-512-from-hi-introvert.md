@@ -35,3 +35,13 @@
 ---
 
 *Related app-side fixes shipped in hi-introvert (this session): CPU-usage double-count in OS→temperature mapping (idle read 30°C+, full load 110°C), macOS memory honesty via `vm_stat` (humidity pinned ~99%), idempotent weather composition.*
+
+## F5 — skill growth needs tier-awareness beyond event triggers (design note, post-F1)
+
+F1 (skills.learnable dispatch, mds PR #16) solves **mechanical** skills only. Semantic
+skills (empathy/reflection — need a conversation evaluator) and longitudinal skills
+(trust/maturity — need memory/relationship accumulation reads) don't fit the trigger
+model; declaring them with Tier-1 triggers grows them on noise. Full lens:
+`docs/skill-growth-tiers.md`. Future mds ask: `skills.evaluated` (consumer-provided
+evaluator, engine-owned growth curve) + a periodic longitudinal pass over
+TrustSystem/MemoryConsolidation state.

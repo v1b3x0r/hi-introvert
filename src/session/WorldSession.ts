@@ -844,6 +844,8 @@ export class WorldSession extends EventEmitter {
     const newWords = this.vocabularyTracker.detectNewWords(message)
     if (newWords.length > 0) {
       this.emit('vocab', { words: newWords })
+      // F1: declarative skill trigger (companion.mdm learning ← new_word_learned)
+      this.world.broadcastEvent('new_word_learned', { words: newWords })
 
       // Companion acknowledges learning
       for (const word of newWords.slice(0, 2)) {  // Max 2 words at once
@@ -868,6 +870,8 @@ export class WorldSession extends EventEmitter {
         arousal: (current.arousal + context.emotionHint.arousal) / 2,
         dominance: current.dominance
       }
+      // F1: declarative skill trigger (companion.mdm empathy ← user.emotion_detected)
+      this.world.broadcastEvent('user.emotion_detected', context.emotionHint)
     }
 
     // 4. Traveler "speaks" (controlled by user)
@@ -959,6 +963,12 @@ export class WorldSession extends EventEmitter {
 
     // 11. Update growth tracker
     this.vocabularyTracker.incrementConversation()
+
+    // F1: declarative skill trigger (companion.mdm conversation ← conversation_milestone)
+    const conversationCount = this.vocabularyTracker.toJSON().conversationCount
+    if (conversationCount > 0 && conversationCount % 10 === 0) {
+      this.world.broadcastEvent('conversation_milestone', { count: conversationCount })
+    }
 
     // Emergent emotional maturity:
     //   0.5 × companion.emotion.dominance  (how grounded/self-assured)

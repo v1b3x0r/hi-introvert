@@ -27,5 +27,28 @@
       { "lang": { "en": "hi." } },
       { "lang": { "en": "who are you?" } }
     ]
+  },
+
+  "skills": {
+    "learnable": [
+      {
+        "name": "empathy",
+        "trigger": "user.emotion_detected",
+        "growth": 0.05,
+        "description": "Better understanding of user's emotional state through observation"
+      },
+      {
+        "name": "learning",
+        "trigger": "new_word_learned",
+        "growth": 0.02,
+        "description": "Expands linguistic understanding and word usage patterns"
+      },
+      {
+        "name": "conversation",
+        "trigger": "conversation_milestone",
+        "growth": 0.03,
+        "description": "Grows more talkative as conversations accumulate"
+      }
+    ]
   }
 }

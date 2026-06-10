@@ -2,8 +2,8 @@
 
 **Last touched:** 2026-06-10 (Scrutinize + sensor-truth session)
 **Location:** `side-projects/hi-introvert/` (FLAT — the old nested wrapper is gone)
-**Git:** ⚠️ history LOST in the 2026-06-10 folder flatten (dotfiles didn't survive the move). Fresh `git init` on `main`, `.gitignore` recreated, **no commits yet** — founder to make the baseline commit. npm `hi-introvert@1.2.9` (ships `src/`) is the surviving pre-session snapshot.
-**Tests:** 129 pass / 1 skip / 0 fail · **Version:** 1.2.9 (published)
+**Git:** ✅ history RECOVERED — the flatten only dropped the local `.git`; everything was on `github.com/v1b3x0r/hi-introvert` all along (incl. the interim session that fixed name-recall/maturity). Local work grafted onto `origin/main` (tree-invariant verified empty); lineage continuous `7992ef0 (1.2.9) → baseline → F1 → v1.3.0`, pushed + tagged.
+**Tests:** 133 pass / 1 skip (+1 known-flaky vocab-seeding sampler) · **Version:** **1.3.0 — PUBLISHED on npm**, depending on `@v1b3x0r/mds-core@^5.12.0` from the registry (bun link removed)
 **Vibe:** side-project, after-hours, treat with humor
 
 ---
